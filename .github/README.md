@@ -1,10 +1,10 @@
 # ArcDLBot
 
-A Telegram bot that fetches and delivers media — right into any chat, or straight through inline mode — backed by the [Arc API](https://api.arcmusic.fun).
+A Telegram bot that fetches and delivers media — right into any chat, or straight through inline mode — backed by the [Arc API](https://portal.arcmusic.fun).
 
 Send it a song name, a YouTube/Spotify/SoundCloud link, or a link from Instagram, Facebook, Threads, Bluesky, TikTok, or Twitter/X, and it downloads, prepares, and sends the file back to you. In group and private chats it replies directly; in inline mode (`@YourBot <query>`) it delivers into whatever chat you're typing in, no need to leave the conversation.
 
-Part of the [ArcMusic](https://github.com/tusar404/ArcMusic) ecosystem.
+
 
 ## Features
 
@@ -100,3 +100,7 @@ bot/
 ## License
 
 MIT — see [LICENSE](LICENSE).
+
+
+
+# Part of the [Team Arc](https://telegram.dog/ArcBotz) ecosystem.
