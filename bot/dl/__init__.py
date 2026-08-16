@@ -1,3 +1,6 @@
+# Copyright (c) 2026 tusar404
+# Licensed under the MIT License.
+
 """
 DL: everything about talking to Arc API and turning its responses into a
 file sent to the user — the HTTP client, ffmpeg conversion, the actual

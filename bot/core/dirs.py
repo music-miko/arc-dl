@@ -1,3 +1,6 @@
+# Copyright (c) 2026 tusar404
+# Licensed under the MIT License.
+
 """
 Filesystem setup for the bot's own working directories. Right now that's
 just the scratch folder downloaded files live in for the few seconds
@@ -7,13 +10,12 @@ job is making sure the folder actually exists before the bot starts
 accepting messages.
 """
 
-import logging
 import os
 
-logger = logging.getLogger("arcdl.core.dirs")
+from .. import LOGGER
 
 
 def setup_directories() -> None:
     download_dir = os.getenv("DOWNLOAD_DIR", "downloads")
     os.makedirs(download_dir, exist_ok=True)
-    logger.info("Working directory ready -> %s", download_dir)
+    LOGGER.info("Working directory ready -> %s", download_dir)

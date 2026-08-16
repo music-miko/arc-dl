@@ -1,3 +1,6 @@
+# Copyright (c) 2026 tusar404
+# Licensed under the MIT License.
+
 """
 Global settings — strictly the things that are genuinely shared/secret
 across the whole bot (Telegram credentials, the Arc API endpoint, Mongo's

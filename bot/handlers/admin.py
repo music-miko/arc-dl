@@ -1,35 +1,18 @@
+# Copyright (c) 2026 tusar404
+# Licensed under the MIT License.
+
+"""/stats and /broadcast — admin-only commands."""
+
 import asyncio
-import logging
-import time
 
 from pyrogram import filters
 from pyrogram.errors import FloodWait
 from pyrogram.types import Message
 
 from ..core.client import app
-from ..core.config import config
 from ..core.mongo import mongo
-
-logger = logging.getLogger("arcdl.handlers.admin")
-
-_START_TIME = time.time()
-
-
-def _is_admin(_, __, message: Message) -> bool:
-    return bool(message.from_user and message.from_user.id in config.sudo_users)
-
-
-admin_filter = filters.create(_is_admin)
-
-
-def _uptime_str() -> str:
-    elapsed = int(time.time() - _START_TIME)
-    d, rem = divmod(elapsed, 86400)
-    h, rem = divmod(rem, 3600)
-    m, s = divmod(rem, 60)
-    parts = [f"{d}d" for _ in [1] if d] + [f"{h}h" for _ in [1] if h] + [f"{m}m" for _ in [1] if m]
-    parts.append(f"{s}s")
-    return "".join(parts)
+from ..utils.access import admin_filter
+from ..utils.uptime import uptime
 
 
 @app.on_message(filters.command("stats") & admin_filter)
@@ -38,7 +21,7 @@ async def stats_cmd(client, message: Message):
     text = (
         "Bot Stats\n\n"
         f"Users: {total_users}\n"
-        f"Uptime: {_uptime_str()}\n"
+        f"Uptime: {uptime.elapsed_str()}\n"
     )
     await message.reply_text(text)
 

@@ -1,14 +1,17 @@
+# Copyright (c) 2026 tusar404
+# Licensed under the MIT License.
+
 """
 Fetches whatever cdn url Arc API handed back (a plain HTTP file, or a
-Telegram-cached message) and sends it to the user — force-converting to
-mp3 only for YouTube audio. `DOWNLOAD_DIR`, `FETCH_TIMEOUT`, and the
-Telegram-cdn regex all live as `self.xxx` here, set up once in `__init__`,
-since this is the only file that needs any of them.
+Telegram-cached message) and sends it to the user, force-converting to a
+Telegram-safe audio format only for YouTube. `DOWNLOAD_DIR`,
+`FETCH_TIMEOUT`, and the Telegram-cdn regex all live as `self.xxx` here,
+set up once in `__init__`, since this is the only file that needs any of
+them.
 """
 
 import asyncio
 import contextlib
-import logging
 import os
 import re
 import uuid
@@ -17,11 +20,11 @@ from urllib.parse import urlparse
 import aiohttp
 from pyrogram import Client
 
-from .ffmpeg import ensure_mp3
+from .. import LOGGER
 from ..utils.format import duration_to_seconds, guess_kind_from_ext, sanitize_filename
 from ..utils.keyboards import keyboards
-
-logger = logging.getLogger("arcdl.dl.downloader")
+from ..utils.mime import sniffer
+from .ffmpeg import ensure_audio
 
 # A bare aiohttp request with no headers gets blocked or served an empty
 # body by several CDNs (Instagram/Facebook's fbcdn in particular), so every
@@ -63,7 +66,7 @@ class MediaDownloader:
             except (RuntimeError, aiohttp.ClientError, asyncio.TimeoutError) as e:
                 last_error = e
                 if attempt < _FETCH_RETRIES:
-                    logger.warning("CDN fetch failed (attempt %d/%d): %s — retrying", attempt, _FETCH_RETRIES, e)
+                    LOGGER.warning("CDN fetch failed (attempt %d/%d): %s — retrying", attempt, _FETCH_RETRIES, e)
                     await asyncio.sleep(1.5)
 
         raise RuntimeError(f"CDN fetch failed after {_FETCH_RETRIES} attempts: {last_error}")
@@ -113,12 +116,32 @@ class MediaDownloader:
         username, message_id = m.group(1), int(m.group(2))
 
         msg = await client.get_messages(username, message_id)
-        if not msg or not (msg.audio or msg.document or msg.voice):
+        media = msg and (msg.audio or msg.document or msg.voice)
+        if not media:
             raise RuntimeError("Cached Telegram message has no downloadable media")
 
-        dest_path = dest_path_no_ext + ".mp3"
+        # The cached message can hold an mp3, an opus voice note, or
+        # basically anything a user forwarded in — the real extension
+        # comes from the media itself, never assumed. `ensure_audio()`
+        # downstream still re-checks the actual codec regardless, so a
+        # wrong guess here can't misclassify the final file, only its
+        # (irrelevant) intermediate name.
+        ext = self._extension_from_media(msg, media)
+        dest_path = dest_path_no_ext + ext
         await client.download_media(msg, file_name=dest_path)
-        return dest_path, ".mp3"
+        return dest_path, ext
+
+    def _extension_from_media(self, msg, media) -> str:
+        if msg.voice:
+            return ".ogg"
+        file_name = getattr(media, "file_name", None)
+        if file_name and "." in file_name:
+            return os.path.splitext(file_name)[1]
+        mime_type = getattr(media, "mime_type", None) or ""
+        for ext, mime in sniffer.ext_mime.items():
+            if mime == mime_type:
+                return ext
+        return ".bin"
 
     async def _download_thumbnail(self, url: str | None, dest_path: str) -> str | None:
         if not url:
@@ -144,10 +167,10 @@ class MediaDownloader:
     async def _fetch_and_prepare(
         self, client: Client, cdn_url: str, title: str, platform: str,
     ) -> tuple[str, str, str]:
-        """Downloads cdn_url, force-converts to mp3 ONLY when platform is
-        'youtube' (every other platform is sent exactly as fetched — no
-        transcoding). Returns (file_path, ext, kind) where kind is one of
-        audio/video/photo/document."""
+        """Downloads cdn_url, force-converts to a Telegram-safe audio
+        format ONLY when platform is 'youtube' (every other platform is
+        sent exactly as fetched — no transcoding). Returns
+        (file_path, ext, kind) where kind is one of audio/video/photo/document."""
         job_id = uuid.uuid4().hex[:12]
         raw_base = os.path.join(self.download_dir, job_id)
 
@@ -160,16 +183,26 @@ class MediaDownloader:
             raise RuntimeError("Downloaded file is empty")
 
         if platform == "youtube":
-            mp3_path = await ensure_mp3(path)
-            if mp3_path != path:
+            audio_path, audio_ext = await ensure_audio(path)
+            if audio_path != path:
                 with contextlib.suppress(Exception):
                     os.remove(path)
             safe_name = sanitize_filename(title)
-            final_path = os.path.join(self.download_dir, f"{job_id}_{safe_name}.mp3")
-            os.replace(mp3_path, final_path)
-            return final_path, ".mp3", "audio"
+            final_path = os.path.join(self.download_dir, f"{job_id}_{safe_name}{audio_ext}")
+            os.replace(audio_path, final_path)
+            return final_path, audio_ext, "audio"
 
         kind = guess_kind_from_ext(ext)
+        if kind == "document":
+            # The extension/Content-Type guess came back empty-handed
+            # (common for Instagram/Facebook photo CDNs) — check the
+            # actual file bytes before giving up and shipping it as a
+            # generic document.
+            sniffed = sniffer.sniff_file(path)
+            if sniffed:
+                kind = sniffed
+                ext = ".jpg" if sniffed == "photo" else ".mp4"
+
         safe_name = sanitize_filename(title)
         final_path = os.path.join(self.download_dir, f"{job_id}_{safe_name}{ext}")
         if os.path.abspath(path) != os.path.abspath(final_path):

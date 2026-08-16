@@ -1,3 +1,8 @@
+# Copyright (c) 2026 tusar404
+# Licensed under the MIT License.
+
+"""Callback-query handlers for the "Download" and playlist-page buttons."""
+
 from pyrogram import filters
 from pyrogram.types import CallbackQuery
 

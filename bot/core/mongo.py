@@ -1,3 +1,6 @@
+# Copyright (c) 2026 tusar404
+# Licensed under the MIT License.
+
 """
 The bot's own Mongo database — just a user list so /broadcast has an
 audience to send to. This has nothing to do with Arc API's own database;
@@ -5,14 +8,12 @@ the bot never touches that.
 """
 
 import datetime
-import logging
 import os
 
 from motor.motor_asyncio import AsyncIOMotorClient
 
+from .. import LOGGER
 from .config import config
-
-logger = logging.getLogger("arcdl.core.mongo")
 
 
 class MongoDB:
@@ -27,7 +28,7 @@ class MongoDB:
         connection is bad, instead of surfacing as a mystery error on the
         first /start."""
         await self.client.admin.command("ping")
-        logger.info("Connected to MongoDB -> database '%s'", self.db_name)
+        LOGGER.info("Connected to MongoDB -> database '%s'", self.db_name)
 
     async def touch_user(self, user_id: int, first_name: str, username: str | None) -> None:
         """Upserts the user + updates last_seen. Called on every /start and

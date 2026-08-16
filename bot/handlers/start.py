@@ -1,8 +1,7 @@
-"""
-/start and /privacy.
-"""
+# Copyright (c) 2026 tusar404
+# Licensed under the MIT License.
 
-import logging
+"""/start and /privacy."""
 
 from pyrogram import filters
 from pyrogram.enums import ChatType
@@ -12,8 +11,6 @@ from ..core.client import app
 from ..core.mongo import mongo
 from ..utils.keyboards import keyboards
 from ..utils.texts import PRIVACY_TEXT, START_TEXT
-
-logger = logging.getLogger("arcdl.handlers.start")
 
 
 @app.on_message(filters.command("start"))

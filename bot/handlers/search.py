@@ -1,8 +1,13 @@
-import logging
+# Copyright (c) 2026 tusar404
+# Licensed under the MIT License.
+
+"""Plain-text and link handling in private chats — search results,
+single-item downloads, and playlist listings."""
 
 from pyrogram import filters
 from pyrogram.types import Message
 
+from .. import LOGGER
 from ..core.client import app
 from ..core.mongo import mongo
 from ..dl.actions import run_download
@@ -11,8 +16,6 @@ from ..utils.cache import cache
 from ..utils.classifier import classifier
 from ..utils.keyboards import keyboards
 from ..utils.texts import NO_RESULTS_TEXT, STARTING_TEXT, UNSUPPORTED_LINK_TEXT
-
-logger = logging.getLogger("arcdl.handlers.search")
 
 
 async def _start_single_download(client, message: Message, entry: dict) -> None:
@@ -138,5 +141,5 @@ async def handle_text(client, message: Message):
     except YTAPIError as e:
         await message.reply_text(str(e))
     except Exception as e:
-        logger.exception("Unexpected error handling message from %s", message.chat.id)
+        LOGGER.exception("Unexpected error handling message from %s", message.chat.id)
         await message.reply_text(f"Something went wrong: {e}")

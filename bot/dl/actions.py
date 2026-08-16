@@ -1,3 +1,6 @@
+# Copyright (c) 2026 tusar404
+# Licensed under the MIT License.
+
 """
 Shared "resolve cached result -> download -> send" logic. Every private-
 chat download path — search result buttons, playlist buttons, and direct
@@ -8,25 +11,14 @@ calls it too, since inline results now deliver media directly instead of
 bouncing the user into a private chat first.
 """
 
-import logging
-
 from pyrogram import Client
 
+from .. import LOGGER
+from ..utils.cache import cache
+from ..utils.classifier import classifier
+from ..utils.texts import DOWNLOADING_TEXT, EXPIRED_TEXT, SENDING_TEXT
 from .api_client import SOCIAL_DOWNLOAD_METHODS, YTAPIError, yt_api
 from .downloader import downloader
-from ..utils.cache import cache
-from ..utils.texts import DOWNLOADING_TEXT, EXPIRED_TEXT, SENDING_TEXT
-
-logger = logging.getLogger("arcdl.dl.actions")
-
-_SOCIAL_LABELS = {
-    "instagram": "Instagram media",
-    "facebook": "Facebook media",
-    "threads": "Threads media",
-    "bluesky": "Bluesky media",
-    "tiktok": "TikTok video",
-    "twitter": "Twitter/X media",
-}
 
 
 async def resolve_cdn(entry: dict) -> tuple[str, dict]:
@@ -101,8 +93,8 @@ async def run_download(client: Client, token: str, *, chat_id: int, status=None)
     duration = entry.get("duration")
     thumbnail = entry.get("thumbnail")
 
-    if platform in _SOCIAL_LABELS and title == "Untitled":
-        title = _SOCIAL_LABELS[platform]
+    if platform in classifier.social_labels and title == "Untitled":
+        title = classifier.social_labels[platform]
 
     await _update_status(status, f"{DOWNLOADING_TEXT} {title}")
 
@@ -126,10 +118,10 @@ async def run_download(client: Client, token: str, *, chat_id: int, status=None)
             await status.delete()
 
     except YTAPIError as e:
-        logger.warning("Download failed for token=%s: %s", token, e)
+        LOGGER.warning("Download failed for token=%s: %s", token, e)
         await _update_status(status, f"Failed: {e}")
     except Exception as e:
-        logger.exception("Unexpected error delivering token=%s", token)
+        LOGGER.exception("Unexpected error delivering token=%s", token)
         await _update_status(status, f"Something went wrong: {e}")
 
 

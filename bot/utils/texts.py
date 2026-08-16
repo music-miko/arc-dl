@@ -1,3 +1,6 @@
+# Copyright (c) 2026 tusar404
+# Licensed under the MIT License.
+
 """Static copy shown to users. Kept plain and to the point on purpose —
 no per-platform emoji labels, just clear text."""
 

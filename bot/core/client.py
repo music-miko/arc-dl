@@ -1,3 +1,6 @@
+# Copyright (c) 2026 tusar404
+# Licensed under the MIT License.
+
 """
 The single shared Kurigram `Client` instance every handler registers
 against. Nothing else in this file — the actual startup sequence (mongo

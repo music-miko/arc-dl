@@ -1,3 +1,6 @@
+# Copyright (c) 2026 tusar404
+# Licensed under the MIT License.
+
 """
 Inline keyboard builders. `PLAYLIST_PAGE_SIZE` and the update channel both
 live here as `self.xxx`, set directly in `__init__` — this is the only

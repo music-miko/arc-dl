@@ -1,3 +1,6 @@
+# Copyright (c) 2026 tusar404
+# Licensed under the MIT License.
+
 """
 Search/playlist results are shown as buttons, but Telegram callback_data
 (and deep-link start params) are both capped well under what a Spotify

@@ -1,3 +1,6 @@
+# Copyright (c) 2026 tusar404
+# Licensed under the MIT License.
+
 """Small, stateless text/filename helpers used across the bot."""
 
 import re

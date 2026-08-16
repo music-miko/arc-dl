@@ -1,3 +1,6 @@
+# Copyright (c) 2026 tusar404
+# Licensed under the MIT License.
+
 """
 Thin async wrapper around Arc API's HTTP routes. This bot never talks to
 YouTube/Spotify/SoundCloud/social platforms directly — every fetch goes
@@ -6,15 +9,13 @@ consumer would.
 """
 
 import asyncio
-import logging
 import os
 import time
 
 import aiohttp
 
+from .. import LOGGER
 from ..core.config import config
-
-logger = logging.getLogger("arcdl.dl.api_client")
 
 # Social-platform scrapes (Instagram, TikTok, Facebook, ...) routinely take
 # longer than a plain cache lookup, so this sits at the high end of the
@@ -61,7 +62,7 @@ async def _get(session: aiohttp.ClientSession, path: str, params: dict) -> dict:
         except (asyncio.TimeoutError, aiohttp.ClientError) as e:
             last_error = e
             if attempt < _REQUEST_RETRIES:
-                logger.warning("Request to %s timed out/failed (attempt %d/%d), retrying...", path, attempt, _REQUEST_RETRIES)
+                LOGGER.warning("Request to %s timed out/failed (attempt %d/%d), retrying...", path, attempt, _REQUEST_RETRIES)
                 await asyncio.sleep(1.5)
                 continue
             raise YTAPIError(f"Request to {path} failed after {_REQUEST_RETRIES} attempts: {e}") from e

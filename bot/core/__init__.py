@@ -1,3 +1,6 @@
+# Copyright (c) 2026 tusar404
+# Licensed under the MIT License.
+
 """
 Core: everything about starting the bot up — settings, the Kurigram
 client, the Mongo connection, and the local directories it needs. Handlers

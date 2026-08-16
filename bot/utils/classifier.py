@@ -1,9 +1,13 @@
+# Copyright (c) 2026 tusar404
+# Licensed under the MIT License.
+
 """
 Turns raw user input (a link, a bare video ID, or a plain search phrase)
 into a (kind, value) pair the rest of the bot can branch on. All the
-regex live as attributes on `MessageClassifier`, compiled once in
-`__init__` — no loose module-level `_XXX_RE = re.compile(...)` constants
-floating around for other files to reach into.
+regex, the social-platform pattern list, and the labels used to describe
+those platforms live as attributes on `MessageClassifier`, built once in
+`__init__` — no loose module-level constants for other files to import
+piecemeal.
 """
 
 import re
@@ -54,6 +58,15 @@ class MessageClassifier:
             ("tiktok", self.tiktok_re),
             ("twitter", self.twitter_re),
         ]
+        self.social_kinds = {kind for kind, _ in self.social_patterns}
+        self.social_labels = {
+            "instagram": "Instagram media",
+            "facebook": "Facebook media",
+            "threads": "Threads media",
+            "bluesky": "Bluesky media",
+            "tiktok": "TikTok video",
+            "twitter": "Twitter/X media",
+        }
 
     def classify(self, text: str) -> tuple[str, str]:
         """Returns (kind, value) where kind is one of:

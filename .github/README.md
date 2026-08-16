@@ -6,6 +6,14 @@ powered by Arc API.
 Live bot: [@ArcDLBot](https://t.me/ArcDLBot)
 Updates: [@ArcUpdates](https://t.me/ArcUpdates) · Chat: [@ArcChatz](https://t.me/ArcChatz)
 
+## Getting an API key
+
+This bot is just an HTTP client of Arc API — it doesn't talk to
+YouTube/Spotify/SoundCloud/social platforms itself. Get your own
+`API_KEY` from **[portal.arcmusic.fun](https://portal.arcmusic.fun)**
+and set it (along with `API_URL`, if you're not using the default
+`https://api.arcmusic.fun`) in your `.env` file — see `.env.example`.
+
 ## Features
 
 - **Search by name** — send a song name and get the top matches as

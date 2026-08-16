@@ -1,20 +1,25 @@
+# Copyright (c) 2026 tusar404
+# Licensed under the MIT License.
+
 """
 ArcDLBot — a Telegram downloader bot built on Kurigram, powered by Arc API.
 
 This file does two things:
 
-1. Configures logging — the single place this happens. Every other module
-   in the package just does `logging.getLogger(__name__)` and inherits
-   this setup; nothing else in the codebase should call
+1. Configures logging — the single place this happens — and exposes the
+   result as `LOGGER`. Every other module in the package imports that
+   one instance (`from .. import LOGGER`, or `from bot import LOGGER`
+   from the top level) instead of calling `logging.getLogger(...)`
+   itself; nothing else in the codebase should call
    `logging.basicConfig()`.
-2. Re-exports everything core/dl/utils expose, so any of it can be reached
-   with a short import from the top-level package, e.g.:
+2. Re-exports everything core/dl/utils expose, so any of it can be
+   reached with a short import from the top-level package, e.g.:
 
        from bot import app, config, mongo, run_download, yt_api, cache
 
-   Handlers are deliberately NOT imported here — `bot/__main__.py` imports
-   `bot.handlers` itself, after Mongo has connected, since importing that
-   package is what registers every `@app.on_*` decorator.
+   Handlers are deliberately NOT imported here — `bot/__main__.py`
+   imports `bot.handlers` itself, after Mongo has connected, since
+   importing that package is what registers every `@app.on_*` decorator.
 """
 
 import logging
@@ -37,8 +42,8 @@ logging.getLogger("pyrogram").setLevel(logging.WARNING)
 logging.getLogger("pymongo").setLevel(logging.WARNING)
 logging.getLogger("aiohttp").setLevel(logging.WARNING)
 
-logger = logging.getLogger("arcdl")
-logger.info("%s v%s initializing...", __bot_name__, __version__)
+LOGGER = logging.getLogger("arcdl")
+LOGGER.info("%s v%s initializing...", __bot_name__, __version__)
 
 from .core import app, config, mongo, setup_directories
 from .utils import (

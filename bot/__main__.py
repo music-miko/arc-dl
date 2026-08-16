@@ -1,3 +1,6 @@
+# Copyright (c) 2026 tusar404
+# Licensed under the MIT License.
+
 """
 Entrypoint — run the bot with `python -m bot`.
 
@@ -10,24 +13,20 @@ Order matters here:
    up on exit.
 """
 
-import logging
-
-from . import __bot_name__, __version__, app, mongo, setup_directories
-
-logger = logging.getLogger("arcdl.main")
+from . import LOGGER, __bot_name__, __version__, app, mongo, setup_directories
 
 
 def main() -> None:
-    logger.info("Starting %s v%s...", __bot_name__, __version__)
+    LOGGER.info("Starting %s v%s...", __bot_name__, __version__)
 
     setup_directories()
     app.loop.run_until_complete(mongo.connect())
 
     from . import handlers  # noqa: F401  (import registers all handlers)
 
-    logger.info("All modules loaded. Connecting to Telegram...")
+    LOGGER.info("All modules loaded. Connecting to Telegram...")
     app.run()
-    logger.info("Arc-DL stopped.")
+    LOGGER.info("Arc-DL stopped.")
 
 
 if __name__ == "__main__":
