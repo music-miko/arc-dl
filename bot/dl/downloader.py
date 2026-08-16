@@ -11,9 +11,11 @@ from urllib.parse import urlparse
 
 import aiohttp
 from pyrogram import Client
+from pyrogram.types import InputMediaAudio, InputMediaDocument, InputMediaPhoto, InputMediaVideo
 
 from .. import LOGGER
-from ..utils.format import duration_to_seconds, guess_kind_from_ext, sanitize_filename
+from ..core.config import config
+from ..utils.format import duration_to_seconds, guess_kind_from_ext, sanitize_filename, truncate
 from ..utils.keyboards import keyboards
 from ..utils.mime import sniffer
 from .ffmpeg import ensure_audio
@@ -220,6 +222,67 @@ class MediaDownloader:
                 await client.send_photo(chat_id, photo=file_path, caption=caption)
             else:
                 await client.send_document(chat_id, document=file_path, file_name=safe_name, caption=caption)
+
+        finally:
+            self._cleanup(file_path, thumb_path)
+
+    async def deliver_inline(
+        self,
+        client: Client,
+        inline_message_id: str,
+        cdn_url: str,
+        title: str,
+        artist: str = "",
+        duration=None,
+        thumbnail_url: str | None = None,
+        platform: str = "youtube",
+    ) -> None:
+        relay_chat = config.log_channel
+        if not relay_chat:
+            raise RuntimeError("LOG_CHANNEL is not configured — required to deliver inline results")
+
+        thumb_path = os.path.join(self.download_dir, f"{uuid.uuid4().hex[:12]}.jpg")
+        file_path = None
+        try:
+            file_path, ext, kind = await self._fetch_and_prepare(client, cdn_url, title, platform)
+            thumb = await self._download_thumbnail(thumbnail_url, thumb_path) if kind in ("audio", "video") else None
+            caption = self._build_caption(title, artist)
+            safe_name = sanitize_filename(title) + ext
+
+            if kind == "audio":
+                relay_msg = await client.send_audio(
+                    relay_chat, audio=file_path, file_name=safe_name,
+                    title=title[:60] if title else None,
+                    performer=artist[:60] if artist else None,
+                    duration=duration_to_seconds(duration),
+                    thumb=thumb, caption=caption,
+                )
+                media = InputMediaAudio(
+                    media=relay_msg.audio.file_id,
+                    caption=caption,
+                    title=truncate(title, 60) if title else None,
+                    performer=truncate(artist, 60) if artist else "",
+                    duration=duration_to_seconds(duration),
+                )
+            elif kind == "video":
+                relay_msg = await client.send_video(
+                    relay_chat, video=file_path, file_name=safe_name,
+                    duration=duration_to_seconds(duration),
+                    thumb=thumb, caption=caption,
+                )
+                media = InputMediaVideo(
+                    media=relay_msg.video.file_id, caption=caption, duration=duration_to_seconds(duration),
+                )
+            elif kind == "photo":
+                relay_msg = await client.send_photo(relay_chat, photo=file_path, caption=caption)
+                media = InputMediaPhoto(media=relay_msg.photo.file_id, caption=caption)
+            else:
+                relay_msg = await client.send_document(
+                    relay_chat, document=file_path, file_name=safe_name, caption=caption,
+                )
+                media = InputMediaDocument(media=relay_msg.document.file_id, caption=caption)
+
+            await client.edit_inline_media(inline_message_id, media=media)
 
         finally:
             self._cleanup(file_path, thumb_path)

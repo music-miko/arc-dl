@@ -20,6 +20,8 @@ class Config:
 
         self.mongo_uri = os.getenv("MONGO_URI", "mongodb://localhost:27017")
 
+        self.log_channel = int(os.getenv("LOG_CHANNEL", "0"))
+
         self.owner_id = int(os.getenv("OWNER_ID", "0"))
         self.sudo_users = {
             int(x) for x in os.getenv("SUDO_USERS", "").replace(" ", "").split(",") if x

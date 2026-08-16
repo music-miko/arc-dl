@@ -14,17 +14,21 @@ from ..utils.texts import STARTING_TEXT
 
 @app.on_callback_query(filters.regex(r"^dl:"))
 async def download_cb(client, callback_query: CallbackQuery):
-    await callback_query.answer(STARTING_TEXT)
-
     token = callback_query.data.split(":", 1)[1]
 
     if callback_query.message:
+        await callback_query.answer(STARTING_TEXT)
         status = await callback_query.message.reply_text(STARTING_TEXT)
         await run_download(client, token, chat_id=callback_query.message.chat.id, status=status)
-    else:
-        # Message was sent via an inline query result — there's no chat_id
-        # the bot can post into, so edit the placeholder message in place.
-        await run_inline_download(client, token, callback_query)
+        return
+
+    entry = cache.get(token)
+    if entry and entry.get("_delivering"):
+        await callback_query.answer("Already fetching this — hang tight.")
+        return
+
+    await callback_query.answer(STARTING_TEXT)
+    await run_inline_download(client, token, callback_query.inline_message_id)
 
 
 @app.on_callback_query(filters.regex(r"^list:"))

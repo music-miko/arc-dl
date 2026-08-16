@@ -2,23 +2,14 @@
 # Licensed under the MIT License.
 
 
-import contextlib
-import os
-import uuid
-
 from pyrogram import Client
-from pyrogram.types import InputMediaAudio, InputMediaDocument, InputMediaPhoto, InputMediaVideo
 
 from .. import LOGGER
 from ..utils.cache import cache
 from ..utils.classifier import classifier
-from ..utils.format import duration_to_seconds, guess_kind_from_ext, truncate
-from ..utils.mime import sniffer
 from ..utils.texts import DOWNLOADING_TEXT, EXPIRED_TEXT, SENDING_TEXT
 from .api_client import YTAPIError, yt_api
 from .downloader import downloader
-
-_PROBE_HEADERS = {"Accept": "*/*"}
 
 
 async def resolve_cdn(entry: dict) -> tuple[str, dict]:
@@ -45,7 +36,8 @@ async def resolve_cdn(entry: dict) -> tuple[str, dict]:
         method = getattr(yt_api, yt_api.social_platforms[kind])
         result = await method(entry["url"])
         if not result.get("success"):
-            raise YTAPIError(f"{kind.capitalize()} fetch failed")
+            reason = result.get("error") or result.get("message") or f"{kind.capitalize()} fetch failed"
+            raise YTAPIError(f"Unable to fetch media from {kind.capitalize()}: {reason}")
         entry = {
             **entry,
             "title": result.get("title") or entry.get("title"),
@@ -69,22 +61,26 @@ async def resolve_cdn(entry: dict) -> tuple[str, dict]:
     raise YTAPIError(f"Unknown result type: {kind!r}")
 
 
+def _resolve_title_artist(entry: dict) -> tuple[str, str, str]:
+    platform = entry["type"]
+    if platform in ("soundcloud_direct", "soundcloud_direct_link"):
+        platform = "soundcloud"
+    title = entry.get("title") or "Untitled"
+    artist = entry.get("artist") or entry.get("channel") or ""
+    if platform in classifier.social_labels and title == "Untitled":
+        title = classifier.social_labels[platform]
+    return platform, title, artist
+
+
 async def run_download(client: Client, token: str, *, chat_id: int, status=None) -> None:
     entry = cache.get(token)
     if not entry:
         await _update_status(status, EXPIRED_TEXT)
         return
 
-    platform = entry["type"]
-    if platform in ("soundcloud_direct", "soundcloud_direct_link"):
-        platform = "soundcloud"
-    title = entry.get("title") or "Untitled"
-    artist = entry.get("artist") or entry.get("channel") or ""
+    platform, title, artist = _resolve_title_artist(entry)
     duration = entry.get("duration")
     thumbnail = entry.get("thumbnail")
-
-    if platform in classifier.social_labels and title == "Untitled":
-        title = classifier.social_labels[platform]
 
     await _update_status(status, f"{DOWNLOADING_TEXT} {title}")
 
@@ -115,93 +111,53 @@ async def run_download(client: Client, token: str, *, chat_id: int, status=None)
         await _update_status(status, f"Something went wrong: {e}")
 
 
-async def run_inline_download(client: Client, token: str, callback_query) -> None:
-    """Deliver a download triggered from an inline result.
-
-    Inline-sent messages have no chat_id/message_id the bot can post into
-    (the bot usually isn't even a member of that chat), only an
-    inline_message_id. So instead of sending a new message we edit the
-    placeholder message's media in place once the file/link is ready.
-    """
-    entry = cache.get(token)
-    if not entry:
-        await _safe_edit_inline(callback_query, EXPIRED_TEXT)
+async def run_inline_download(client: Client, token: str, inline_message_id: str) -> None:
+    cache_entry = cache.get(token)
+    if not cache_entry:
+        await _safe_edit_inline(client, inline_message_id, EXPIRED_TEXT)
         return
 
-    platform = entry["type"]
-    if platform in ("soundcloud_direct", "soundcloud_direct_link"):
-        platform = "soundcloud"
-    title = entry.get("title") or "Untitled"
-    artist = entry.get("artist") or entry.get("channel") or ""
-    duration = entry.get("duration")
+    if cache_entry.get("_delivering"):
+        return
+    cache_entry["_delivering"] = True
 
-    if platform in classifier.social_labels and title == "Untitled":
-        title = classifier.social_labels[platform]
-
-    await _safe_edit_inline(callback_query, f"{DOWNLOADING_TEXT} {title}")
-
-    local_path = None
     try:
+        entry = cache_entry
+        platform, title, artist = _resolve_title_artist(entry)
+        duration = entry.get("duration")
+        thumbnail = entry.get("thumbnail")
+
+        await _safe_edit_inline(client, inline_message_id, f"{DOWNLOADING_TEXT} {title}")
+
         cdn_url, entry = await resolve_cdn(entry)
         title = entry.get("title") or title
+        thumbnail = entry.get("thumbnail") or thumbnail
         duration = entry.get("duration") or duration
 
         if not cdn_url:
             raise YTAPIError("No download link returned")
 
-        await _safe_edit_inline(callback_query, f"{SENDING_TEXT} {title}")
+        await _safe_edit_inline(client, inline_message_id, f"{SENDING_TEXT} {title}")
 
-        caption = title
-        if artist:
-            caption += f"\n{artist}"
-
-        if downloader.telegram_cdn_re.match(cdn_url):
-            job_id = uuid.uuid4().hex[:12]
-            base_path = os.path.join(downloader.download_dir, job_id)
-            local_path, ext = await downloader._download_telegram_cdn(client, cdn_url, base_path)
-            media_source = local_path
-            kind = guess_kind_from_ext(ext)
-        else:
-            media_source = cdn_url
-            kind, _ct = await sniffer.probe_remote(cdn_url, _PROBE_HEADERS)
-            if kind is None:
-                kind = "audio" if platform in ("youtube", "spotify", "soundcloud") else "document"
-
-        if kind == "audio":
-            media = InputMediaAudio(
-                media=media_source,
-                caption=caption,
-                title=truncate(title, 60) if title else None,
-                performer=truncate(artist, 60) if artist else "",
-                duration=duration_to_seconds(duration),
-            )
-        elif kind == "video":
-            media = InputMediaVideo(
-                media=media_source, caption=caption, duration=duration_to_seconds(duration),
-            )
-        elif kind == "photo":
-            media = InputMediaPhoto(media=media_source, caption=caption)
-        else:
-            media = InputMediaDocument(media=media_source, caption=caption)
-
-        await callback_query.edit_message_media(media=media)
+        await downloader.deliver_inline(
+            client, inline_message_id, cdn_url,
+            title=title, artist=artist, duration=duration,
+            thumbnail_url=thumbnail, platform=platform,
+        )
 
     except YTAPIError as e:
         LOGGER.warning("Inline download failed for token=%s: %s", token, e)
-        await _safe_edit_inline(callback_query, f"Failed: {e}")
+        await _safe_edit_inline(client, inline_message_id, f"Failed: {e}")
     except Exception as e:
         LOGGER.exception("Unexpected error delivering inline token=%s", token)
-        await _safe_edit_inline(callback_query, f"Something went wrong: {e}")
+        await _safe_edit_inline(client, inline_message_id, f"Something went wrong: {e}")
     finally:
-        if local_path:
-            with contextlib.suppress(Exception):
-                if os.path.exists(local_path):
-                    os.remove(local_path)
+        cache_entry["_delivering"] = False
 
 
-async def _safe_edit_inline(callback_query, text: str) -> None:
+async def _safe_edit_inline(client: Client, inline_message_id: str, text: str) -> None:
     try:
-        await callback_query.edit_message_text(text)
+        await client.edit_inline_text(inline_message_id, text)
     except Exception:
         pass
 

@@ -2,9 +2,8 @@
 # Licensed under the MIT License.
 
 
-import uuid
-
 from pyrogram.types import (
+    ChosenInlineResult,
     InlineKeyboardButton,
     InlineKeyboardMarkup,
     InlineQuery,
@@ -13,6 +12,7 @@ from pyrogram.types import (
 )
 
 from ..core.client import app
+from ..dl.actions import run_inline_download
 from ..dl.api_client import YTAPIError, yt_api
 from ..utils.cache import cache
 from ..utils.classifier import classifier
@@ -27,17 +27,17 @@ def _youtube_thumb(video_id: str) -> str:
 
 
 def _download_keyboard(token: str) -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup([[InlineKeyboardButton("⬇️ Download", callback_data=f"dl:{token}")]])
+    return InlineKeyboardMarkup([[InlineKeyboardButton("🔄 Retry", callback_data=f"dl:{token}")]])
 
 
 def _placeholder_text(title: str) -> str:
-    return f"{title}\n\nTap Download below and I'll fetch this and send it right here."
+    return f"{title}\n\nFetching... (stuck? tap Retry below)"
 
 
 def _make_result(*, title: str, description: str = "", entry: dict, thumb_url: str | None = None) -> InlineQueryResultArticle:
     token = cache.put_new(entry)
     return InlineQueryResultArticle(
-        id=uuid.uuid4().hex,
+        id=token,
         title=truncate(title or "Untitled", 60),
         description=truncate(description, 60) if description else None,
         thumb_url=thumb_url or _DEFAULT_THUMB,
@@ -134,3 +134,10 @@ async def inline_search(client, inline_query: InlineQuery):
         switch_pm_text=None if results else "No results — try another search or link",
         switch_pm_parameter="hi" if not results else None,
     )
+
+
+@app.on_chosen_inline_result()
+async def inline_result_chosen(client, chosen_inline_result: ChosenInlineResult):
+    if not chosen_inline_result.inline_message_id:
+        return
+    await run_inline_download(client, chosen_inline_result.result_id, chosen_inline_result.inline_message_id)
