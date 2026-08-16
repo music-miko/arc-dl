@@ -1,7 +1,6 @@
 # Copyright (c) 2026 tusar404
 # Licensed under the MIT License.
 
-"""/stats and /broadcast — admin-only commands."""
 
 import asyncio
 
@@ -49,7 +48,6 @@ async def broadcast_cmd(client, message: Message):
             except Exception:
                 failed += 1
         except Exception:
-            # Most common cause: user blocked the bot / deactivated account.
             failed += 1
             await mongo.remove_user(uid)
 
@@ -58,6 +56,6 @@ async def broadcast_cmd(client, message: Message):
                 await status.edit_text(f"Broadcasting... {i}/{total} (sent {sent}, failed {failed})")
             except Exception:
                 pass
-        await asyncio.sleep(0.05)  # gentle throttle to stay well under flood limits
+        await asyncio.sleep(0.05)
 
     await status.edit_text(f"Broadcast finished.\nSent: {sent}\nFailed: {failed}")

@@ -1,8 +1,6 @@
 # Copyright (c) 2026 tusar404
 # Licensed under the MIT License.
 
-"""Static copy shown to users. Kept plain and to the point on purpose —
-no per-platform emoji labels, just clear text."""
 
 START_TEXT = """Hi, I'm {bot_name}.
 
@@ -28,8 +26,6 @@ PRIVACY_TEXT = """Privacy
 
 This isn't a substitute for reading the terms of the services you're downloading from — please respect copyright and each platform's own rules.
 """
-
-GROUP_REDIRECT_TEXT = "Downloads only work in a private chat with me — tap below to open one."
 
 EXPIRED_TEXT = "This result has expired. Please search again."
 

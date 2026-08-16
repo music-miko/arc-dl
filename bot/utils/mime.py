@@ -1,17 +1,6 @@
 # Copyright (c) 2026 tusar404
 # Licensed under the MIT License.
 
-"""
-Byte-signature based media detection. CDN headers lie more often than
-they should — Instagram/Facebook/Threads in particular are prone to
-serving a photo as `application/octet-stream` with no useful URL
-extension — so this looks at the actual file bytes (or, for a remote
-url we haven't downloaded yet, the first chunk of the response body)
-instead of trusting Content-Type or the url path alone.
-
-Everything lives as `self.xxx` on `MediaSniffer`, set once in
-`__init__`, since this is the only file that needs any of it.
-"""
 
 import aiohttp
 
@@ -29,12 +18,6 @@ class MediaSniffer:
         }
 
     def sniff_bytes(self, head: bytes) -> str | None:
-        """Returns 'photo', 'video', or None from a magic-number check on
-        the first bytes of a file. Never returns 'audio' — audio
-        containers are too ambiguous to tell apart from a handful of
-        bytes, and every caller already has a better signal for that
-        (ffprobe for local files, a declared Content-Type for remote
-        ones)."""
         if head[:3] == b"\xff\xd8\xff":
             return "photo"
         if head[:8] == b"\x89PNG\r\n\x1a\n":
@@ -60,9 +43,6 @@ class MediaSniffer:
         return self.ext_mime.get(ext.lower(), default)
 
     async def probe_remote(self, url: str, headers: dict) -> tuple[str | None, str | None]:
-        """HEAD-probes `url` for its real Content-Type, falling back to a
-        tiny ranged GET for servers that don't support HEAD. Returns
-        (kind, content_type) — kind is 'audio'/'video'/'photo'/None."""
         content_type = await self._head_content_type(url, headers)
         if not content_type:
             content_type = await self._ranged_content_type(url, headers)

@@ -1,7 +1,6 @@
 # Copyright (c) 2026 tusar404
 # Licensed under the MIT License.
 
-"""Small, stateless text/filename helpers used across the bot."""
 
 import re
 
@@ -14,7 +13,6 @@ def sanitize_filename(name: str, max_len: int = 150) -> str:
 
 
 def duration_to_seconds(duration) -> int:
-    """Accepts 'HH:MM:SS', 'MM:SS', or an int/float already in seconds."""
     if duration is None:
         return 0
     if isinstance(duration, (int, float)):
@@ -35,8 +33,6 @@ def truncate(text: str, length: int) -> str:
 
 
 def guess_kind_from_ext(ext: str) -> str:
-    """Rough classification used to pick send_audio/send_video/send_photo
-    for platforms we don't force-convert (i.e. everything but YouTube)."""
     ext = (ext or "").lower().lstrip(".")
     if ext in {"mp3", "m4a", "aac", "ogg", "opus", "wav", "flac"}:
         return "audio"

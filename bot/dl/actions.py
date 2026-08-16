@@ -1,15 +1,6 @@
 # Copyright (c) 2026 tusar404
 # Licensed under the MIT License.
 
-"""
-Shared "resolve cached result -> download -> send" logic. Every private-
-chat download path — search result buttons, playlist buttons, and direct
-links — funnels through `run_download` here, so there's exactly one place
-that talks to Arc API and the downloader. `resolve_cdn` is the reusable
-"figure out the real file url for this entry" half of that; inline.py
-calls it too, since inline results now deliver media directly instead of
-bouncing the user into a private chat first.
-"""
 
 from pyrogram import Client
 
@@ -17,21 +8,12 @@ from .. import LOGGER
 from ..utils.cache import cache
 from ..utils.classifier import classifier
 from ..utils.texts import DOWNLOADING_TEXT, EXPIRED_TEXT, SENDING_TEXT
-from .api_client import SOCIAL_DOWNLOAD_METHODS, YTAPIError, yt_api
+from .api_client import YTAPIError, yt_api
 from .downloader import downloader
 
 
 async def resolve_cdn(entry: dict) -> tuple[str, dict]:
-    """Turns a cached (or freshly-built) result entry into a real, fetchable
-    cdn url by calling the right Arc API download route for its `type`.
-    Returns (cdn_url, updated_entry) — updated_entry may have richer
-    title/thumbnail/duration than what was passed in, when the download API
-    itself returns more authoritative metadata. Public because inline.py
-    also calls this directly to resolve media before answering an inline
-    query, not just run_download() below."""
     if entry.get("cdn"):
-        # Already resolved before this was cached (e.g. SoundCloud, where
-        # the API's /download call is synchronous and one-shot).
         return entry["cdn"], entry
 
     kind = entry["type"]
@@ -50,18 +32,19 @@ async def resolve_cdn(entry: dict) -> tuple[str, dict]:
         }
         return result.get("cdn"), entry
 
-    if kind in SOCIAL_DOWNLOAD_METHODS:
-        method = getattr(yt_api, SOCIAL_DOWNLOAD_METHODS[kind])
+    if kind in yt_api.social_platforms:
+        method = getattr(yt_api, yt_api.social_platforms[kind])
         result = await method(entry["url"])
         if not result.get("success"):
             raise YTAPIError(f"{kind.capitalize()} fetch failed")
+        entry = {
+            **entry,
+            "title": result.get("title") or entry.get("title"),
+            "thumbnail": result.get("thumbnail") or result.get("thumbnail_url") or entry.get("thumbnail"),
+        }
         return result.get("cdn"), entry
 
     if kind == "soundcloud_direct_link":
-        # Inline mode caches the raw link (resolving up front, before the
-        # user even picks a result, would be wasted work for results they
-        # never select) — resolved here instead, unlike the PM flow's
-        # soundcloud_direct which resolves eagerly in handlers/search.py.
         result = await yt_api.download_soundcloud(entry["url"])
         if not result or not result.get("cdn"):
             raise YTAPIError("SoundCloud fetch failed")
@@ -78,8 +61,6 @@ async def resolve_cdn(entry: dict) -> tuple[str, dict]:
 
 
 async def run_download(client: Client, token: str, *, chat_id: int, status=None) -> None:
-    """Resolves `token` from the cache and delivers the media to `chat_id`.
-    `status` (a Message) is edited in place to show progress if given."""
     entry = cache.get(token)
     if not entry:
         await _update_status(status, EXPIRED_TEXT)

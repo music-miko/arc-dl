@@ -1,19 +1,6 @@
 # Copyright (c) 2026 tusar404
 # Licensed under the MIT License.
 
-"""
-Search/playlist results are shown as buttons, but Telegram callback_data
-(and deep-link start params) are both capped well under what a Spotify
-URL or full track metadata needs. So each button/link gets a short token,
-and the actual info (source type, url/id, title, artist, duration,
-thumbnail) lives here in memory, looked up when the button is pressed or
-the deep link is opened.
-
-This is intentionally a simple bounded LRU-ish store, not a database —
-entries are only useful for as long as the message referencing them is on
-screen, and losing them on a restart just means "please search again",
-which is a fine failure mode for a downloader bot.
-"""
 
 import uuid
 from collections import OrderedDict

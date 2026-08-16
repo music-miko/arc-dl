@@ -1,12 +1,6 @@
 # Copyright (c) 2026 tusar404
 # Licensed under the MIT License.
 
-"""
-Admin-only access control for privileged commands (`/stats`,
-`/broadcast`, ...). A single `filters.create` predicate, built once here
-so handler modules just attach `admin_filter` instead of each defining
-their own copy of the same check.
-"""
 
 from pyrogram import filters
 from pyrogram.types import Message

@@ -1,8 +1,6 @@
 # Copyright (c) 2026 tusar404
 # Licensed under the MIT License.
 
-"""Plain-text and link handling in private chats — search results,
-single-item downloads, and playlist listings."""
 
 from pyrogram import filters
 from pyrogram.types import Message
@@ -11,25 +9,22 @@ from .. import LOGGER
 from ..core.client import app
 from ..core.mongo import mongo
 from ..dl.actions import run_download
-from ..dl.api_client import SOCIAL_DOWNLOAD_METHODS, YTAPIError, yt_api
+from ..dl.api_client import YTAPIError, yt_api
 from ..utils.cache import cache
 from ..utils.classifier import classifier
 from ..utils.keyboards import keyboards
 from ..utils.texts import NO_RESULTS_TEXT, STARTING_TEXT, UNSUPPORTED_LINK_TEXT
 
+not_command_filter = filters.create(lambda _, __, m: not (m.text or "").startswith("/"))
+
 
 async def _start_single_download(client, message: Message, entry: dict) -> None:
-    """For links that point at exactly one track/post — goes through the
-    same cache + run_download path as button clicks, just skipping the button."""
     token = cache.put_new(entry)
     status = await message.reply_text(STARTING_TEXT)
     await run_download(client, token, chat_id=message.chat.id, status=status)
 
 
 async def _show_paginated_list(message: Message, header: str, tracks: list[dict], entry_builder) -> None:
-    """Shows every track (not just the first N) behind real Prev/Next
-    pagination — picking a track downloads just that one, never the whole
-    playlist."""
     entries = []
     for t in tracks:
         built = entry_builder(t)
@@ -46,11 +41,8 @@ async def _show_paginated_list(message: Message, header: str, tracks: list[dict]
     )
 
 
-@app.on_message(filters.private & filters.text & ~filters.via_bot)
+@app.on_message(filters.private & filters.text & ~filters.via_bot & not_command_filter)
 async def handle_text(client, message: Message):
-    if message.text.startswith("/"):
-        return  # let dedicated command handlers deal with it
-
     user = message.from_user
     if user:
         await mongo.touch_user(user.id, user.first_name or "", user.username)
@@ -59,8 +51,6 @@ async def handle_text(client, message: Message):
 
     try:
         if kind == "youtube_video":
-            # download_youtube() extracts the video id server-side, so a
-            # raw URL or bare ID both work without extra parsing here.
             title, channel, duration, thumb = "YouTube Audio", "", None, None
             try:
                 hits = await yt_api.search_youtube(value, limit=1)
@@ -115,7 +105,7 @@ async def handle_text(client, message: Message):
                 "thumbnail": result.get("thumbnail") or result.get("thumbnail_url"),
             })
 
-        elif kind in SOCIAL_DOWNLOAD_METHODS:
+        elif kind in yt_api.social_platforms:
             await _start_single_download(client, message, {
                 "type": kind, "url": value, "title": kind.capitalize(),
             })
@@ -123,7 +113,7 @@ async def handle_text(client, message: Message):
         elif kind == "unsupported_url":
             await message.reply_text(UNSUPPORTED_LINK_TEXT)
 
-        else:  # plain-text search
+        else:
             results = await yt_api.search_youtube(value, limit=5)
             entries = []
             for r in results:
@@ -133,6 +123,10 @@ async def handle_text(client, message: Message):
                     "duration": r.get("duration"), "thumbnail": r.get("thumbnail"),
                 })
                 entries.append((token, {"title": r["title"], "duration": r.get("duration")}))
+
+            if not entries:
+                await message.reply_text(NO_RESULTS_TEXT)
+                return
 
             await message.reply_text(
                 f"Top results for {value}:", reply_markup=keyboards.results_keyboard(entries)

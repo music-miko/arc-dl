@@ -1,14 +1,6 @@
 # Copyright (c) 2026 tusar404
 # Licensed under the MIT License.
 
-"""
-Fetches whatever cdn url Arc API handed back (a plain HTTP file, or a
-Telegram-cached message) and sends it to the user, force-converting to a
-Telegram-safe audio format only for YouTube. `DOWNLOAD_DIR`,
-`FETCH_TIMEOUT`, and the Telegram-cdn regex all live as `self.xxx` here,
-set up once in `__init__`, since this is the only file that needs any of
-them.
-"""
 
 import asyncio
 import contextlib
@@ -26,9 +18,6 @@ from ..utils.keyboards import keyboards
 from ..utils.mime import sniffer
 from .ffmpeg import ensure_audio
 
-# A bare aiohttp request with no headers gets blocked or served an empty
-# body by several CDNs (Instagram/Facebook's fbcdn in particular), so every
-# CDN fetch goes out looking like an ordinary browser request.
 _CDN_HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -37,9 +26,6 @@ _CDN_HEADERS = {
     "Accept": "*/*",
 }
 
-# CDNs are free to answer with 206 Partial Content even when nothing asked
-# for a byte range (some always chunk large media responses this way) — it
-# still carries the full, usable body, so it belongs alongside 200 here.
 _OK_STATUSES = {200, 206}
 
 _FETCH_RETRIES = 2
@@ -47,17 +33,12 @@ _FETCH_RETRIES = 2
 
 class MediaDownloader:
     def __init__(self):
-        self.download_dir = os.getenv("DOWNLOAD_DIR", "downloads")
-        self.fetch_timeout = float(os.getenv("FETCH_TIMEOUT", "300"))
+        self.download_dir = "downloads"
+        self.fetch_timeout = 300.0
         self.telegram_cdn_re = re.compile(r"https?://(?:t\.me|telegram\.dog)/([^/]+)/(\d+)")
         os.makedirs(self.download_dir, exist_ok=True)
 
-    # ---------------- fetching ----------------
-
     async def _download_http(self, url: str, dest_path_no_ext: str) -> tuple[str, str]:
-        """Downloads url to dest_path_no_ext + detected extension. Returns
-        (actual_path, ext). Retries once on a timeout/empty body, since
-        flaky social-platform CDNs are the norm rather than the exception."""
         last_error: Exception | None = None
 
         for attempt in range(1, _FETCH_RETRIES + 1):
@@ -120,12 +101,6 @@ class MediaDownloader:
         if not media:
             raise RuntimeError("Cached Telegram message has no downloadable media")
 
-        # The cached message can hold an mp3, an opus voice note, or
-        # basically anything a user forwarded in — the real extension
-        # comes from the media itself, never assumed. `ensure_audio()`
-        # downstream still re-checks the actual codec regardless, so a
-        # wrong guess here can't misclassify the final file, only its
-        # (irrelevant) intermediate name.
         ext = self._extension_from_media(msg, media)
         dest_path = dest_path_no_ext + ext
         await client.download_media(msg, file_name=dest_path)
@@ -167,10 +142,6 @@ class MediaDownloader:
     async def _fetch_and_prepare(
         self, client: Client, cdn_url: str, title: str, platform: str,
     ) -> tuple[str, str, str]:
-        """Downloads cdn_url, force-converts to a Telegram-safe audio
-        format ONLY when platform is 'youtube' (every other platform is
-        sent exactly as fetched — no transcoding). Returns
-        (file_path, ext, kind) where kind is one of audio/video/photo/document."""
         job_id = uuid.uuid4().hex[:12]
         raw_base = os.path.join(self.download_dir, job_id)
 
@@ -194,10 +165,6 @@ class MediaDownloader:
 
         kind = guess_kind_from_ext(ext)
         if kind == "document":
-            # The extension/Content-Type guess came back empty-handed
-            # (common for Instagram/Facebook photo CDNs) — check the
-            # actual file bytes before giving up and shipping it as a
-            # generic document.
             sniffed = sniffer.sniff_file(path)
             if sniffed:
                 kind = sniffed
@@ -216,8 +183,6 @@ class MediaDownloader:
                     if os.path.exists(p):
                         os.remove(p)
 
-    # ---------------- delivery ----------------
-
     async def deliver_to_chat(
         self,
         client: Client,
@@ -229,8 +194,6 @@ class MediaDownloader:
         thumbnail_url: str | None = None,
         platform: str = "youtube",
     ) -> None:
-        """Fetches cdn_url and sends it to chat_id, named after the title.
-        Raises on failure — callers show the error to the user."""
         thumb_path = os.path.join(self.download_dir, f"{uuid.uuid4().hex[:12]}.jpg")
         file_path = None
         try:

@@ -1,14 +1,6 @@
 # Copyright (c) 2026 tusar404
 # Licensed under the MIT License.
 
-"""
-Turns raw user input (a link, a bare video ID, or a plain search phrase)
-into a (kind, value) pair the rest of the bot can branch on. All the
-regex, the social-platform pattern list, and the labels used to describe
-those platforms live as attributes on `MessageClassifier`, built once in
-`__init__` — no loose module-level constants for other files to import
-piecemeal.
-"""
 
 import re
 
@@ -28,12 +20,6 @@ class MessageClassifier:
 
         self.soundcloud_re = re.compile(r"soundcloud\.com/", re.I)
 
-        # Instagram/X are narrowed to the actual post-permalink shapes
-        # (rather than "any instagram.com/x.com URL") so a profile link or
-        # a bare hashtag page is classified as unsupported instead of being
-        # forwarded to Arc API and coming back as a confusing 404 — every
-        # shape here is still a *subset* of what Arc API itself accepts, so
-        # nothing that used to work stops working.
         self.instagram_re = re.compile(
             r"^https?://(www\.)?instagram\.com/(p|reel|reels|tv|stories|share)/.+", re.I
         )
@@ -47,9 +33,6 @@ class MessageClassifier:
 
         self.url_re = re.compile(r"https?://\S+", re.I)
 
-        # Ordered (platform_kind, pattern) — first match wins. Shared by the
-        # plain-text handler and the inline-query handler so both recognize
-        # the same links.
         self.social_patterns = [
             ("instagram", self.instagram_re),
             ("facebook", self.facebook_re),
@@ -69,11 +52,6 @@ class MessageClassifier:
         }
 
     def classify(self, text: str) -> tuple[str, str]:
-        """Returns (kind, value) where kind is one of:
-        'youtube_playlist', 'youtube_video', 'spotify_playlist', 'spotify_track',
-        'soundcloud', 'instagram', 'facebook', 'threads', 'bluesky', 'tiktok',
-        'twitter', 'unsupported_url', 'search'. `value` is the relevant link/id/query.
-        """
         text = text.strip()
 
         if self.spotify_playlist_re.search(text):
@@ -92,8 +70,6 @@ class MessageClassifier:
                 return kind, text
 
         if self.url_re.match(text):
-            # Some other URL we don't understand — treat as unsupported
-            # rather than silently searching YouTube for a raw link.
             return "unsupported_url", text
 
         return "search", text

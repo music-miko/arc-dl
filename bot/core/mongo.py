@@ -1,14 +1,8 @@
 # Copyright (c) 2026 tusar404
 # Licensed under the MIT License.
 
-"""
-The bot's own Mongo database — just a user list so /broadcast has an
-audience to send to. This has nothing to do with Arc API's own database;
-the bot never touches that.
-"""
 
 import datetime
-import os
 
 from motor.motor_asyncio import AsyncIOMotorClient
 
@@ -18,21 +12,20 @@ from .config import config
 
 class MongoDB:
     def __init__(self):
-        self.db_name = os.getenv("MONGO_DB_NAME", "arc")
+        self.db_name = "arc"
         self.client = AsyncIOMotorClient(config.mongo_uri)
         self.db = self.client[self.db_name]
         self.users = self.db["users"]
 
     async def connect(self) -> None:
-        """Pings Mongo so startup fails loudly (and immediately) if the
-        connection is bad, instead of surfacing as a mystery error on the
-        first /start."""
         await self.client.admin.command("ping")
         LOGGER.info("Connected to MongoDB -> database '%s'", self.db_name)
 
+    async def close(self) -> None:
+        self.client.close()
+        LOGGER.info("MongoDB connection closed.")
+
     async def touch_user(self, user_id: int, first_name: str, username: str | None) -> None:
-        """Upserts the user + updates last_seen. Called on every /start and
-        every message so /broadcast always has an up-to-date audience."""
         await self.users.update_one(
             {"_id": user_id},
             {

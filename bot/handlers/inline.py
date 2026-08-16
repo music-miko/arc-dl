@@ -1,39 +1,14 @@
 # Copyright (c) 2026 tusar404
 # Licensed under the MIT License.
 
-"""
-Inline mode.
-
-Every result here carries the actual media — audio as
-InlineQueryResultAudio, a photo as InlineQueryResultPhoto, or anything
-else (mostly social-platform video) as InlineQueryResultDocument —
-fetched from Arc API and resolved to a real cdn url before the query is
-answered. There's no "Download" button and no deep link into a private
-chat: if we can hand over the file directly, there's no reason to make
-the user tap through to get it.
-
-Every candidate's cdn url is probed for its real Content-Type before
-it's added to the answer. Telegram validates that itself when it fetches
-the url, and one bad result — most commonly a raw opus/webm stream
-mislabeled as an mp3 — makes it reject the *entire* batch with
-FileContentTypeInvalid, silently dropping every other result along with
-it. Dropping just the one bad result here is far cheaper than losing all
-of them.
-
-The trade-off is speed, not correctness: resolving a cdn url means an
-actual Arc API call (and, for an uncached YouTube video, a scrape) plus
-this probe, so each candidate is resolved with a short per-item timeout
-and silently dropped if it doesn't come back in time, rather than
-holding up the whole inline query for one slow result.
-"""
 
 import asyncio
 
 from pyrogram.types import (
     InlineQuery,
     InlineQueryResultAudio,
-    InlineQueryResultDocument,
     InlineQueryResultPhoto,
+    InlineQueryResultVideo,
 )
 
 from ..core.client import app
@@ -46,19 +21,13 @@ from ..utils.mime import sniffer
 
 
 class InlineResolver:
-    """Everything inline mode needs to turn a cached result entry into a
-    real, type-verified InlineQueryResult. The per-item resolve timeout
-    and the CDN probe headers live as `self.xxx` here, since this is the
-    only file that needs either."""
-
     def __init__(self):
-        self.resolve_timeout = 8.0
+        self.resolve_timeout = 60.0
+        self.search_limit = 5
         self.probe_headers = {"Accept": "*/*"}
+        self.default_thumb = "https://placehold.co/200x200/png?text=No+Thumbnail"
 
     async def resolve(self, entry: dict) -> tuple[str, dict] | None:
-        """resolve_cdn() with a short timeout, returning None on any
-        failure — a slow or broken result is simply left out of the
-        inline answer."""
         try:
             cdn_url, entry = await asyncio.wait_for(resolve_cdn(entry), timeout=self.resolve_timeout)
         except Exception:
@@ -67,9 +36,6 @@ class InlineResolver:
         if not cdn_url:
             return None
         if downloader.telegram_cdn_re.match(cdn_url):
-            # A Telegram-cached message reference, not a real fetchable
-            # url — inline results need an actual url, so this can't be
-            # used directly. Fine to skip; the private chat still handles it.
             return None
 
         return cdn_url, entry
@@ -77,10 +43,6 @@ class InlineResolver:
     async def audio_result(
         self, cdn_url: str, title: str, artist: str = "", duration=None,
     ) -> InlineQueryResultAudio | None:
-        """Only returns a result once the url's real Content-Type has
-        been confirmed as audio. Telegram fetches audio_url itself and
-        rejects the whole batch if it turns out to be something else, so
-        that's verified here instead of assumed."""
         kind, _ = await sniffer.probe_remote(cdn_url, self.probe_headers)
         if kind != "audio":
             return None
@@ -92,19 +54,19 @@ class InlineResolver:
             audio_duration=duration_to_seconds(duration),
         )
 
-    async def media_result(self, cdn_url: str, title: str):
-        """Photo or Document, decided from the url's real Content-Type —
-        never guessed from the url path, since social platforms are
-        inconsistent about serving a useful extension. Returns None (and
-        drops the candidate) when the Content-Type isn't recognizably
-        visual media, rather than guessing a mime type Telegram might
-        reject."""
+    async def media_result(self, cdn_url: str, title: str, thumb_url: str | None = None):
         kind, content_type = await sniffer.probe_remote(cdn_url, self.probe_headers)
+        thumb = thumb_url or self.default_thumb
 
         if kind == "photo":
-            return InlineQueryResultPhoto(photo_url=cdn_url, title=title)
+            return InlineQueryResultPhoto(photo_url=cdn_url, thumb_url=thumb, title=title)
         if kind == "video":
-            return InlineQueryResultDocument(document_url=cdn_url, title=title, mime_type=content_type)
+            return InlineQueryResultVideo(
+                video_url=cdn_url,
+                thumb_url=thumb,
+                title=title,
+                mime_type=content_type or "video/mp4",
+            )
 
         return None
 
@@ -136,10 +98,6 @@ async def inline_search(client, inline_query: InlineQuery):
     results = []
 
     if kind in ("youtube_playlist", "spotify_playlist"):
-        # A playlist needs a stateful, paginated pick-a-track flow — not
-        # something a single inline result can offer. Send them to the
-        # private chat, where picking a track downloads and sends it
-        # directly (no button hop after that either).
         await inline_query.answer(
             results=[],
             switch_pm_text="Open in private chat to browse this playlist",
@@ -179,17 +137,18 @@ async def inline_search(client, inline_query: InlineQuery):
     elif kind in classifier.social_kinds:
         resolved = await inline_resolver.resolve({"type": kind, "url": value})
         if resolved:
-            cdn_url, _ = resolved
-            result = await inline_resolver.media_result(cdn_url, classifier.social_labels[kind])
+            cdn_url, entry = resolved
+            title = entry.get("title") or classifier.social_labels[kind]
+            result = await inline_resolver.media_result(cdn_url, title, entry.get("thumbnail"))
             if result:
                 results.append(result)
 
     elif kind == "unsupported_url":
-        pass  # no results — falls through to the "no results" switch_pm below
+        pass
 
-    else:  # plain-text search — resolve a handful of hits concurrently
+    else:
         try:
-            hits = await yt_api.search_youtube(value, limit=3)
+            hits = await yt_api.search_youtube(value, limit=inline_resolver.search_limit)
         except YTAPIError:
             hits = []
 

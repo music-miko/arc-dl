@@ -1,7 +1,6 @@
 # Copyright (c) 2026 tusar404
 # Licensed under the MIT License.
 
-"""Tracks how long the bot process has been running, for `/stats`."""
 
 import time
 
