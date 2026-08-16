@@ -1,0 +1,5 @@
+kurigram
+tgcrypto
+aiohttp
+motor==3.6.0
+python-dotenv==1.0.1
