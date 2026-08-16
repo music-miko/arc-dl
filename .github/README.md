@@ -103,4 +103,4 @@ MIT — see [LICENSE](LICENSE).
 
 
 
-# Part of the [Team Arc](https://telegram.dog/ArcBotz) ecosystem.
+### Part of the [Team Arc](https://telegram.dog/ArcBotz) ecosystem.
