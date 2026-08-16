@@ -1,8 +1,8 @@
 """
-Inline keyboard builders. `PLAYLIST_PAGE_SIZE` lives here as `self.
-playlist_page_size`, read directly from its own env var — this is the
-only file that needs it, so there's no reason to route it through a
-shared config object.
+Inline keyboard builders. `PLAYLIST_PAGE_SIZE` and the update channel both
+live here as `self.xxx`, set directly in `__init__` — this is the only
+file that needs either of them, so there's no reason to route them
+through a shared config object.
 """
 
 import os
@@ -11,12 +11,12 @@ from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from .format import truncate
 
-CHANNEL_URL = "https://telegram.dog/ArcUpdates"
-
 
 class KeyboardBuilder:
     def __init__(self):
         self.playlist_page_size = int(os.getenv("PLAYLIST_PAGE_SIZE", "8"))
+        self.channel_username = "ArcUpdates"
+        self.channel_url = f"https://telegram.dog/{self.channel_username}"
 
     def results_keyboard(self, entries: list[tuple[str, dict]]) -> InlineKeyboardMarkup:
         """entries: list of (token, meta) where meta has 'title' and 'duration'.
@@ -73,18 +73,9 @@ class KeyboardBuilder:
 
     def start_keyboard(self) -> InlineKeyboardMarkup:
         return InlineKeyboardMarkup([
-            [InlineKeyboardButton("Join Channel", url=CHANNEL_URL)],
+            [InlineKeyboardButton("Join Channel", url=self.channel_url)],
             [InlineKeyboardButton("Privacy", callback_data="privacy")],
         ])
-
-    def inline_download_keyboard(self, bot_username: str, token: str) -> InlineKeyboardMarkup:
-        """Inline-mode results can't attach a working "download now" button
-        directly — Telegram never tells the bot which chat an inline result
-        landed in, so the bot has no reliable way to deliver a file to it.
-        Instead this deep-links back into a private chat with the bot,
-        which starts the download there (see bot/handlers/start.py)."""
-        url = f"https://t.me/{bot_username}?start=dl_{token}"
-        return InlineKeyboardMarkup([[InlineKeyboardButton("Download", url=url)]])
 
 
 keyboards = KeyboardBuilder()

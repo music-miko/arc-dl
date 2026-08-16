@@ -24,12 +24,22 @@ class MessageClassifier:
 
         self.soundcloud_re = re.compile(r"soundcloud\.com/", re.I)
 
-        self.instagram_re = re.compile(r"^https?://(www\.)?instagram\.com/.+", re.I)
+        # Instagram/X are narrowed to the actual post-permalink shapes
+        # (rather than "any instagram.com/x.com URL") so a profile link or
+        # a bare hashtag page is classified as unsupported instead of being
+        # forwarded to Arc API and coming back as a confusing 404 — every
+        # shape here is still a *subset* of what Arc API itself accepts, so
+        # nothing that used to work stops working.
+        self.instagram_re = re.compile(
+            r"^https?://(www\.)?instagram\.com/(p|reel|reels|tv|stories|share)/.+", re.I
+        )
         self.facebook_re = re.compile(r"^https?://(www\.|web\.|m\.)?(facebook\.com|fb\.watch)/.+", re.I)
         self.threads_re = re.compile(r"^https?://(www\.)?threads\.(net|com)/.+", re.I)
         self.bluesky_re = re.compile(r"^https?://(www\.)?bsky\.app/.+", re.I)
         self.tiktok_re = re.compile(r"^https?://(www\.|vm\.|vt\.)?tiktok\.com/.+", re.I)
-        self.twitter_re = re.compile(r"^https?://(www\.)?(twitter\.com|x\.com)/.+", re.I)
+        self.twitter_re = re.compile(
+            r"^https?://(www\.)?(twitter\.com|x\.com)/(?:[A-Za-z0-9_]+|i)/status/\d+", re.I
+        )
 
         self.url_re = re.compile(r"https?://\S+", re.I)
 

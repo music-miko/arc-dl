@@ -12,14 +12,13 @@ Order matters here:
 
 import logging
 
-from . import __version__
-from .core import app, mongo, setup_directories
+from . import __bot_name__, __version__, app, mongo, setup_directories
 
 logger = logging.getLogger("arcdl.main")
 
 
 def main() -> None:
-    logger.info("Starting Arc-DL v%s...", __version__)
+    logger.info("Starting %s v%s...", __bot_name__, __version__)
 
     setup_directories()
     app.loop.run_until_complete(mongo.connect())

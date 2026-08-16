@@ -1,12 +1,5 @@
 """
 /start and /privacy.
-
-/start also handles the deep link inline-mode results send users on:
-`https://t.me/<bot>?start=dl_<token>`. Telegram never tells a bot which
-chat an inline result landed in, so there's no reliable way to attach a
-working "download now" button to an inline result directly. Instead the
-inline button opens a private chat with this exact parameter, which
-starts the download right here — see bot/handlers/inline.py.
 """
 
 import logging
@@ -17,9 +10,8 @@ from pyrogram.types import CallbackQuery, Message
 
 from ..core.client import app
 from ..core.mongo import mongo
-from ..dl.actions import run_download
 from ..utils.keyboards import keyboards
-from ..utils.texts import PRIVACY_TEXT, START_TEXT, STARTING_TEXT
+from ..utils.texts import PRIVACY_TEXT, START_TEXT
 
 logger = logging.getLogger("arcdl.handlers.start")
 
@@ -35,13 +27,6 @@ async def start_cmd(client, message: Message):
             f"Hi, I'm {client.me.first_name}. Message me privately to search and download.",
             reply_markup=keyboards.group_redirect_keyboard(client.me.username),
         )
-        return
-
-    args = message.command[1:]
-    if args and args[0].startswith("dl_"):
-        token = args[0][len("dl_"):]
-        status = await message.reply_text(STARTING_TEXT)
-        await run_download(client, token, chat_id=message.chat.id, status=status)
         return
 
     await message.reply_text(

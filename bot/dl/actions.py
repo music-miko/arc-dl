@@ -1,9 +1,11 @@
 """
-Shared "resolve cached result -> download -> send" logic. Every download
-path in the bot — search result buttons, playlist buttons, and deep-link
-downloads opened from inline mode — all funnel through `run_download`
-here, so there's exactly one place that talks to Arc API and the
-downloader.
+Shared "resolve cached result -> download -> send" logic. Every private-
+chat download path — search result buttons, playlist buttons, and direct
+links — funnels through `run_download` here, so there's exactly one place
+that talks to Arc API and the downloader. `resolve_cdn` is the reusable
+"figure out the real file url for this entry" half of that; inline.py
+calls it too, since inline results now deliver media directly instead of
+bouncing the user into a private chat first.
 """
 
 import logging
@@ -27,10 +29,14 @@ _SOCIAL_LABELS = {
 }
 
 
-async def _resolve_cdn(entry: dict) -> tuple[str, dict]:
-    """Returns (cdn_url, updated_entry) — updated_entry may have richer
-    title/thumbnail/duration than what was cached, when the download API
-    itself returns more authoritative metadata."""
+async def resolve_cdn(entry: dict) -> tuple[str, dict]:
+    """Turns a cached (or freshly-built) result entry into a real, fetchable
+    cdn url by calling the right Arc API download route for its `type`.
+    Returns (cdn_url, updated_entry) — updated_entry may have richer
+    title/thumbnail/duration than what was passed in, when the download API
+    itself returns more authoritative metadata. Public because inline.py
+    also calls this directly to resolve media before answering an inline
+    query, not just run_download() below."""
     if entry.get("cdn"):
         # Already resolved before this was cached (e.g. SoundCloud, where
         # the API's /download call is synchronous and one-shot).
@@ -101,7 +107,7 @@ async def run_download(client: Client, token: str, *, chat_id: int, status=None)
     await _update_status(status, f"{DOWNLOADING_TEXT} {title}")
 
     try:
-        cdn_url, entry = await _resolve_cdn(entry)
+        cdn_url, entry = await resolve_cdn(entry)
         title = entry.get("title") or title
         thumbnail = entry.get("thumbnail") or thumbnail
         duration = entry.get("duration") or duration

@@ -9,5 +9,3 @@ from .client import app
 from .config import config
 from .dirs import setup_directories
 from .mongo import mongo
-
-__all__ = ["app", "config", "mongo", "setup_directories"]

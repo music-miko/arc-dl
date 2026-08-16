@@ -11,5 +11,3 @@ from . import admin, callback, inline, search, start  # noqa: F401
 
 logger = logging.getLogger("arcdl.handlers")
 logger.info("Handlers loaded -> start, search, callback, inline, admin")
-
-__all__ = ["admin", "callback", "inline", "search", "start"]

@@ -6,6 +6,7 @@ the bot never touches that.
 
 import datetime
 import logging
+import os
 
 from motor.motor_asyncio import AsyncIOMotorClient
 
@@ -16,8 +17,9 @@ logger = logging.getLogger("arcdl.core.mongo")
 
 class MongoDB:
     def __init__(self):
+        self.db_name = os.getenv("MONGO_DB_NAME", "arc")
         self.client = AsyncIOMotorClient(config.mongo_uri)
-        self.db = self.client[config.mongo_db_name]
+        self.db = self.client[self.db_name]
         self.users = self.db["users"]
 
     async def connect(self) -> None:
@@ -25,7 +27,7 @@ class MongoDB:
         connection is bad, instead of surfacing as a mystery error on the
         first /start."""
         await self.client.admin.command("ping")
-        logger.info("Connected to MongoDB -> database '%s'", config.mongo_db_name)
+        logger.info("Connected to MongoDB -> database '%s'", self.db_name)
 
     async def touch_user(self, user_id: int, first_name: str, username: str | None) -> None:
         """Upserts the user + updates last_seen. Called on every /start and

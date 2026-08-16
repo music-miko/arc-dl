@@ -11,7 +11,8 @@ Send me:
 - A playlist link — I'll list its tracks, tap any one to download
 - An Instagram, Facebook, Threads, TikTok, Twitter (X), or Bluesky link — I'll fetch the media in it
 
-Inline mode: type @{bot_username} <song name or link> in any chat.
+Inline mode: type @{bot_username} <song name or link> in any chat — results
+are sent directly, no extra taps needed.
 
 Use /privacy to see how I handle your data.
 """

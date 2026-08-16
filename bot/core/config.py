@@ -1,9 +1,10 @@
 """
 Global settings — strictly the things that are genuinely shared/secret
-across the whole bot (Telegram credentials, the YT-API endpoint, Mongo,
-admins). Everything else (download paths, poll timings, pagination sizes,
-promo text, ...) is a plain `self.xxx` on the class that actually uses it,
-set directly in that file — no reason to route those through here too.
+across the whole bot (Telegram credentials, the Arc API endpoint, Mongo's
+connection URI, admins). Everything else (download paths, poll timings,
+pagination sizes, the Mongo database name, ...) is a plain `self.xxx` on
+the class that actually uses it, set directly in that file — no reason to
+route those through here too.
 """
 
 import os
@@ -21,12 +22,13 @@ class Config:
         self.bot_token = os.getenv("BOT_TOKEN", "")
 
         # --- Arc API (this bot is a client of it, over plain HTTP) ---
-        self.yt_api_base_url = os.getenv("YT_API_BASE_URL", "https://api.arcmusic.fun").rstrip("/")
-        self.yt_api_key = os.getenv("YT_API_KEY", "")
+        self.api_url = os.getenv("API_URL", "https://api.arcmusic.fun").rstrip("/")
+        self.api_key = os.getenv("API_KEY", "")
 
-        # --- Mongo (bot's own DB — user list for /broadcast, nothing else) ---
+        # --- Mongo (bot's own DB — user list for /broadcast, nothing else;
+        # the database name itself lives in bot/core/mongo.py, the only
+        # file that needs it) ---
         self.mongo_uri = os.getenv("MONGO_URI", "mongodb://localhost:27017")
-        self.mongo_db_name = os.getenv("MONGO_DB_NAME", "arcdl")
 
         # --- Admins ---
         self.owner_id = int(os.getenv("OWNER_ID", "0"))

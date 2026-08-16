@@ -1,11 +1,12 @@
 """
 Fetches whatever cdn url Arc API handed back (a plain HTTP file, or a
 Telegram-cached message) and sends it to the user — force-converting to
-mp3 only for YouTube audio. `DOWNLOAD_DIR` and the Telegram-cdn regex both
-live as `self.xxx` here, set up once in `__init__`, since this is the
-only file that needs either of them.
+mp3 only for YouTube audio. `DOWNLOAD_DIR`, `FETCH_TIMEOUT`, and the
+Telegram-cdn regex all live as `self.xxx` here, set up once in `__init__`,
+since this is the only file that needs any of them.
 """
 
+import asyncio
 import contextlib
 import logging
 import os
@@ -18,13 +19,33 @@ from pyrogram import Client
 
 from .ffmpeg import ensure_mp3
 from ..utils.format import duration_to_seconds, guess_kind_from_ext, sanitize_filename
+from ..utils.keyboards import keyboards
 
 logger = logging.getLogger("arcdl.dl.downloader")
+
+# A bare aiohttp request with no headers gets blocked or served an empty
+# body by several CDNs (Instagram/Facebook's fbcdn in particular), so every
+# CDN fetch goes out looking like an ordinary browser request.
+_CDN_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+    ),
+    "Accept": "*/*",
+}
+
+# CDNs are free to answer with 206 Partial Content even when nothing asked
+# for a byte range (some always chunk large media responses this way) — it
+# still carries the full, usable body, so it belongs alongside 200 here.
+_OK_STATUSES = {200, 206}
+
+_FETCH_RETRIES = 2
 
 
 class MediaDownloader:
     def __init__(self):
         self.download_dir = os.getenv("DOWNLOAD_DIR", "downloads")
+        self.fetch_timeout = float(os.getenv("FETCH_TIMEOUT", "300"))
         self.telegram_cdn_re = re.compile(r"https?://(?:t\.me|telegram\.dog)/([^/]+)/(\d+)")
         os.makedirs(self.download_dir, exist_ok=True)
 
@@ -32,10 +53,26 @@ class MediaDownloader:
 
     async def _download_http(self, url: str, dest_path_no_ext: str) -> tuple[str, str]:
         """Downloads url to dest_path_no_ext + detected extension. Returns
-        (actual_path, ext)."""
-        async with aiohttp.ClientSession() as session:
-            async with session.get(url, timeout=aiohttp.ClientTimeout(total=300)) as r:
-                if r.status != 200:
+        (actual_path, ext). Retries once on a timeout/empty body, since
+        flaky social-platform CDNs are the norm rather than the exception."""
+        last_error: Exception | None = None
+
+        for attempt in range(1, _FETCH_RETRIES + 1):
+            try:
+                return await self._download_http_once(url, dest_path_no_ext)
+            except (RuntimeError, aiohttp.ClientError, asyncio.TimeoutError) as e:
+                last_error = e
+                if attempt < _FETCH_RETRIES:
+                    logger.warning("CDN fetch failed (attempt %d/%d): %s — retrying", attempt, _FETCH_RETRIES, e)
+                    await asyncio.sleep(1.5)
+
+        raise RuntimeError(f"CDN fetch failed after {_FETCH_RETRIES} attempts: {last_error}")
+
+    async def _download_http_once(self, url: str, dest_path_no_ext: str) -> tuple[str, str]:
+        timeout = aiohttp.ClientTimeout(total=self.fetch_timeout)
+        async with aiohttp.ClientSession(headers=_CDN_HEADERS) as session:
+            async with session.get(url, timeout=timeout) as r:
+                if r.status not in _OK_STATUSES:
                     raise RuntimeError(f"CDN returned HTTP {r.status}")
 
                 ext = ""
@@ -55,10 +92,17 @@ class MediaDownloader:
                     }.get(ct, ".bin")
 
                 dest_path = dest_path_no_ext + ext
+                size = 0
                 with open(dest_path, "wb") as f:
                     async for chunk in r.content.iter_chunked(64 * 1024):
                         if chunk:
+                            size += len(chunk)
                             f.write(chunk)
+
+                if size == 0:
+                    with contextlib.suppress(Exception):
+                        os.remove(dest_path)
+                    raise RuntimeError("CDN response body was empty")
 
                 return dest_path, ext
 
@@ -94,7 +138,7 @@ class MediaDownloader:
         caption = title or ""
         if artist:
             caption += f"\n{artist}"
-        caption += "\n\n@ArcUpdates"
+        caption += f"\n\n@{keyboards.channel_username}"
         return caption
 
     async def _fetch_and_prepare(

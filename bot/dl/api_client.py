@@ -1,7 +1,7 @@
 """
 Thin async wrapper around Arc API's HTTP routes. This bot never talks to
 YouTube/Spotify/SoundCloud/social platforms directly — every fetch goes
-through the deployed Arc API using YT_API_KEY, exactly like any other API
+through the deployed Arc API using API_KEY, exactly like any other API
 consumer would.
 """
 
@@ -15,6 +15,12 @@ import aiohttp
 from ..core.config import config
 
 logger = logging.getLogger("arcdl.dl.api_client")
+
+# Social-platform scrapes (Instagram, TikTok, Facebook, ...) routinely take
+# longer than a plain cache lookup, so this sits at the high end of the
+# 60-80s range rather than the old, too-tight 30s.
+_REQUEST_TIMEOUT = float(os.getenv("REQUEST_TIMEOUT", "75"))
+_REQUEST_RETRIES = 2
 
 
 class YTAPIError(Exception):
@@ -33,21 +39,34 @@ async def _get(session: aiohttp.ClientSession, path: str, params: dict) -> dict:
         k: ("true" if v else "false") if isinstance(v, bool) else v
         for k, v in params.items()
     }
-    clean_params["api_key"] = config.yt_api_key
-    url = f"{config.yt_api_base_url}{path}"
+    clean_params["api_key"] = config.api_key
+    url = f"{config.api_url}{path}"
+    timeout = aiohttp.ClientTimeout(total=_REQUEST_TIMEOUT)
 
-    async with session.get(url, params=clean_params, timeout=aiohttp.ClientTimeout(total=30)) as r:
+    last_error: Exception | None = None
+    for attempt in range(1, _REQUEST_RETRIES + 1):
         try:
-            data = await r.json()
-        except Exception:
-            text = await r.text()
-            raise YTAPIError(f"Non-JSON response ({r.status}): {text[:200]}", status=r.status)
+            async with session.get(url, params=clean_params, timeout=timeout) as r:
+                try:
+                    data = await r.json()
+                except Exception:
+                    text = await r.text()
+                    raise YTAPIError(f"Non-JSON response ({r.status}): {text[:200]}", status=r.status)
 
-        if r.status != 200:
-            detail = data.get("detail") if isinstance(data, dict) else data
-            raise YTAPIError(str(detail) or f"HTTP {r.status}", status=r.status)
+                if r.status != 200:
+                    detail = data.get("detail") if isinstance(data, dict) else data
+                    raise YTAPIError(str(detail) or f"HTTP {r.status}", status=r.status)
 
-        return data
+                return data
+        except (asyncio.TimeoutError, aiohttp.ClientError) as e:
+            last_error = e
+            if attempt < _REQUEST_RETRIES:
+                logger.warning("Request to %s timed out/failed (attempt %d/%d), retrying...", path, attempt, _REQUEST_RETRIES)
+                await asyncio.sleep(1.5)
+                continue
+            raise YTAPIError(f"Request to {path} failed after {_REQUEST_RETRIES} attempts: {e}") from e
+
+    raise YTAPIError(f"Request to {path} failed: {last_error}")
 
 
 class YTAPIClient:
@@ -159,8 +178,12 @@ class YTAPIClient:
 
 yt_api = YTAPIClient()
 
-# platform kind (from utils.classifier.classify) -> YTAPIClient method name
-SOCIAL_DOWNLOAD_METHODS = {
+
+SOCIAL_DOWNLOAD_METHODS: dict[str, str] = {
+    # Maps the platform kind returned by utils.classifier.classify() to the
+    # YTAPIClient method that handles it. Handlers and dl/actions.py use
+    # this to dispatch to the right method via getattr(yt_api, ...) instead
+    # of hand-writing an if/elif chain per platform.
     "instagram": "download_instagram",
     "facebook": "download_facebook",
     "threads": "download_threads",
