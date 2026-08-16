@@ -2,83 +2,64 @@
 # Licensed under the MIT License.
 
 
-import asyncio
+import uuid
 
 from pyrogram.types import (
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
     InlineQuery,
-    InlineQueryResultAudio,
-    InlineQueryResultPhoto,
-    InlineQueryResultVideo,
+    InlineQueryResultArticle,
+    InputTextMessageContent,
 )
 
 from ..core.client import app
-from ..dl.actions import resolve_cdn
 from ..dl.api_client import YTAPIError, yt_api
-from ..dl.downloader import downloader
+from ..utils.cache import cache
 from ..utils.classifier import classifier
-from ..utils.format import duration_to_seconds, truncate
-from ..utils.mime import sniffer
+from ..utils.format import truncate
+
+_SEARCH_LIMIT = 5
+_DEFAULT_THUMB = "https://placehold.co/200x200/png?text=No+Thumbnail"
 
 
-class InlineResolver:
-    def __init__(self):
-        self.resolve_timeout = 60.0
-        self.search_limit = 5
-        self.probe_headers = {"Accept": "*/*"}
-        self.default_thumb = "https://placehold.co/200x200/png?text=No+Thumbnail"
-
-    async def resolve(self, entry: dict) -> tuple[str, dict] | None:
-        try:
-            cdn_url, entry = await asyncio.wait_for(resolve_cdn(entry), timeout=self.resolve_timeout)
-        except Exception:
-            return None
-
-        if not cdn_url:
-            return None
-        if downloader.telegram_cdn_re.match(cdn_url):
-            return None
-
-        return cdn_url, entry
-
-    async def audio_result(
-        self, cdn_url: str, title: str, artist: str = "", duration=None,
-    ) -> InlineQueryResultAudio | None:
-        kind, _ = await sniffer.probe_remote(cdn_url, self.probe_headers)
-        if kind != "audio":
-            return None
-
-        return InlineQueryResultAudio(
-            audio_url=cdn_url,
-            title=truncate(title or "Audio", 60),
-            performer=truncate(artist, 60) if artist else "",
-            audio_duration=duration_to_seconds(duration),
-        )
-
-    async def media_result(self, cdn_url: str, title: str, thumb_url: str | None = None):
-        kind, content_type = await sniffer.probe_remote(cdn_url, self.probe_headers)
-        thumb = thumb_url or self.default_thumb
-
-        if kind == "photo":
-            return InlineQueryResultPhoto(photo_url=cdn_url, thumb_url=thumb, title=title)
-        if kind == "video":
-            return InlineQueryResultVideo(
-                video_url=cdn_url,
-                thumb_url=thumb,
-                title=title,
-                mime_type=content_type or "video/mp4",
-            )
-
-        return None
-
-    async def resolve_youtube_hit(self, hit: dict) -> InlineQueryResultAudio | None:
-        resolved = await self.resolve({"type": "youtube", "video_id": hit["video_id"]})
-        if not resolved:
-            return None
-        cdn_url, _ = resolved
-        return await self.audio_result(cdn_url, hit.get("title"), hit.get("channel", ""), hit.get("duration"))
+def _youtube_thumb(video_id: str) -> str:
+    return f"https://i.ytimg.com/vi/{video_id}/hqdefault.jpg"
 
 
-inline_resolver = InlineResolver()
+def _download_keyboard(token: str) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup([[InlineKeyboardButton("⬇️ Download", callback_data=f"dl:{token}")]])
+
+
+def _placeholder_text(title: str) -> str:
+    return f"{title}\n\nTap Download below and I'll fetch this and send it right here."
+
+
+def _make_result(*, title: str, description: str = "", entry: dict, thumb_url: str | None = None) -> InlineQueryResultArticle:
+    token = cache.put_new(entry)
+    return InlineQueryResultArticle(
+        id=uuid.uuid4().hex,
+        title=truncate(title or "Untitled", 60),
+        description=truncate(description, 60) if description else None,
+        thumb_url=thumb_url or _DEFAULT_THUMB,
+        input_message_content=InputTextMessageContent(_placeholder_text(title or "Untitled")),
+        reply_markup=_download_keyboard(token),
+    )
+
+
+def _youtube_result(hit: dict) -> InlineQueryResultArticle:
+    return _make_result(
+        title=hit.get("title") or "YouTube Audio",
+        description=hit.get("channel", ""),
+        thumb_url=hit.get("thumbnail") or _youtube_thumb(hit["video_id"]),
+        entry={
+            "type": "youtube",
+            "video_id": hit["video_id"],
+            "title": hit.get("title"),
+            "artist": hit.get("channel", ""),
+            "duration": hit.get("duration"),
+            "thumbnail": hit.get("thumbnail"),
+        },
+    )
 
 
 @app.on_inline_query()
@@ -112,52 +93,43 @@ async def inline_search(client, inline_query: InlineQuery):
         except YTAPIError:
             hits = []
         if hits:
-            result = await inline_resolver.resolve_youtube_hit(hits[0])
-            if result:
-                results.append(result)
+            results.append(_youtube_result(hits[0]))
 
     elif kind == "spotify_track":
-        resolved = await inline_resolver.resolve({"type": "spotify", "url": value})
-        if resolved:
-            cdn_url, entry = resolved
-            result = await inline_resolver.audio_result(cdn_url, entry.get("title") or "Spotify Track")
-            if result:
-                results.append(result)
+        results.append(_make_result(
+            title="Spotify Track",
+            description="Tap to fetch and send this track",
+            entry={"type": "spotify", "url": value, "title": "Spotify Track"},
+        ))
 
     elif kind == "soundcloud":
-        resolved = await inline_resolver.resolve({"type": "soundcloud_direct_link", "url": value})
-        if resolved:
-            cdn_url, entry = resolved
-            result = await inline_resolver.audio_result(
-                cdn_url, entry.get("title") or "SoundCloud Track", entry.get("artist", "")
-            )
-            if result:
-                results.append(result)
+        results.append(_make_result(
+            title="SoundCloud Track",
+            description="Tap to fetch and send this track",
+            entry={"type": "soundcloud_direct_link", "url": value, "title": "SoundCloud Track"},
+        ))
 
     elif kind in classifier.social_kinds:
-        resolved = await inline_resolver.resolve({"type": kind, "url": value})
-        if resolved:
-            cdn_url, entry = resolved
-            title = entry.get("title") or classifier.social_labels[kind]
-            result = await inline_resolver.media_result(cdn_url, title, entry.get("thumbnail"))
-            if result:
-                results.append(result)
+        label = classifier.social_labels[kind]
+        results.append(_make_result(
+            title=label,
+            description="Tap to fetch and send this media",
+            entry={"type": kind, "url": value, "title": label},
+        ))
 
     elif kind == "unsupported_url":
         pass
 
     else:
         try:
-            hits = await yt_api.search_youtube(value, limit=inline_resolver.search_limit)
+            hits = await yt_api.search_youtube(value, limit=_SEARCH_LIMIT)
         except YTAPIError:
             hits = []
-
-        resolved = await asyncio.gather(*(inline_resolver.resolve_youtube_hit(h) for h in hits))
-        results = [r for r in resolved if r]
+        results = [_youtube_result(h) for h in hits]
 
     await inline_query.answer(
         results=results,
-        cache_time=30,
+        cache_time=5,
         is_personal=True,
         switch_pm_text=None if results else "No results — try another search or link",
         switch_pm_parameter="hi" if not results else None,

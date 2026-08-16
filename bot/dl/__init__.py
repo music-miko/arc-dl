@@ -2,6 +2,6 @@
 # Licensed under the MIT License.
 
 
-from .actions import resolve_cdn, run_download
+from .actions import resolve_cdn, run_download, run_inline_download
 from .api_client import YTAPIClient, YTAPIError, yt_api
 from .downloader import MediaDownloader, downloader

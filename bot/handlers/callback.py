@@ -6,7 +6,7 @@ from pyrogram import filters
 from pyrogram.types import CallbackQuery
 
 from ..core.client import app
-from ..dl.actions import run_download
+from ..dl.actions import run_download, run_inline_download
 from ..utils.cache import cache
 from ..utils.keyboards import keyboards
 from ..utils.texts import STARTING_TEXT
@@ -17,8 +17,14 @@ async def download_cb(client, callback_query: CallbackQuery):
     await callback_query.answer(STARTING_TEXT)
 
     token = callback_query.data.split(":", 1)[1]
-    status = await callback_query.message.reply_text(STARTING_TEXT)
-    await run_download(client, token, chat_id=callback_query.message.chat.id, status=status)
+
+    if callback_query.message:
+        status = await callback_query.message.reply_text(STARTING_TEXT)
+        await run_download(client, token, chat_id=callback_query.message.chat.id, status=status)
+    else:
+        # Message was sent via an inline query result — there's no chat_id
+        # the bot can post into, so edit the placeholder message in place.
+        await run_inline_download(client, token, callback_query)
 
 
 @app.on_callback_query(filters.regex(r"^list:"))
