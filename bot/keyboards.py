@@ -1,0 +1,63 @@
+from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+
+from .config import config
+from .utils import truncate
+
+
+def results_keyboard(entries: list[tuple[str, dict]]) -> InlineKeyboardMarkup:
+    """entries: list of (token, meta) where meta has 'title' and 'duration'.
+    Used for buttons the bot sends itself in a private chat."""
+    rows = []
+    for token, meta in entries:
+        label = truncate(meta.get("title") or "Untitled", 45)
+        duration = meta.get("duration")
+        if duration:
+            label = f"{label} • {duration}"
+        rows.append([InlineKeyboardButton(f"⬇️ {label}", callback_data=f"dl:{token}")])
+    return InlineKeyboardMarkup(rows)
+
+
+def paginated_results_keyboard(
+    list_token: str, entries: list[tuple[str, dict]], page: int
+) -> InlineKeyboardMarkup:
+    """entries: the FULL track list as (token, meta) pairs — slicing to the
+    current page happens here. Each track gets its own download button;
+    Prev/Next only changes which page is shown, it never downloads
+    anything by itself (so a playlist is never fetched all at once)."""
+    page_size = config.PLAYLIST_PAGE_SIZE
+    total_pages = max(1, (len(entries) + page_size - 1) // page_size)
+    page = max(0, min(page, total_pages - 1))
+
+    start = page * page_size
+    page_entries = entries[start:start + page_size]
+
+    rows = []
+    for token, meta in page_entries:
+        label = truncate(meta.get("title") or "Untitled", 40)
+        duration = meta.get("duration")
+        if duration:
+            label = f"{label} • {duration}"
+        rows.append([InlineKeyboardButton(f"⬇️ {label}", callback_data=f"dl:{token}")])
+
+    nav = []
+    if page > 0:
+        nav.append(InlineKeyboardButton("⬅️ Prev", callback_data=f"list:{list_token}:{page - 1}"))
+    nav.append(InlineKeyboardButton(f"{page + 1}/{total_pages}", callback_data="noop"))
+    if page < total_pages - 1:
+        nav.append(InlineKeyboardButton("Next ➡️", callback_data=f"list:{list_token}:{page + 1}"))
+    if len(nav) > 1:
+        rows.append(nav)
+
+    return InlineKeyboardMarkup(rows)
+
+
+def group_redirect_keyboard(bot_username: str) -> InlineKeyboardMarkup | None:
+    if not bot_username:
+        return None
+    return InlineKeyboardMarkup(
+        [[InlineKeyboardButton("Open in private", url=f"https://t.me/{bot_username}")]]
+    )
+
+
+def start_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup([[InlineKeyboardButton("🔒 Privacy", callback_data="privacy")]])
