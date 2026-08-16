@@ -1,4 +1,4 @@
-# ArcDLBot
+# ArcDLBot(Part of the [Team Arc](https://telegram.dog/ArcBotz))
 
 A Telegram bot that fetches and delivers media — right into any chat, or straight through inline mode — backed by the [Arc API](https://portal.arcmusic.fun).
 
@@ -100,7 +100,3 @@ bot/
 ## License
 
 MIT — see [LICENSE](LICENSE).
-
-
-
-### Part of the [Team Arc](https://telegram.dog/ArcBotz) ecosystem.
