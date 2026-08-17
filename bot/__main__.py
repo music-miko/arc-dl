@@ -20,7 +20,7 @@ async def main() -> None:
 
     await app.start()
 
-    from . import handlers  # noqa: F401  (import registers every handler)
+    from . import handlers
 
     LOGGER.info("All modules loaded. Bot is up and running.")
 
@@ -39,7 +39,7 @@ async def main() -> None:
             await yt_api.close()
         with suppress(Exception):
             await mongo.close()
-        LOGGER.info("Arc-DL stopped.")
+        LOGGER.info("Arc Downloader stopped.")
 
 
 if __name__ == "__main__":

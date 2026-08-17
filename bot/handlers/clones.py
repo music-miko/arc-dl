@@ -111,8 +111,6 @@ async def managed_bot_created(client, managed_bot: ManagedBotUpdated):
         pass
 
 
-# Main-bot only — deliberately NOT added to HANDLERS/attach_shared_handlers,
-# so a clone can't create further clones or manage anyone else's.
 app.add_handler(MessageHandler(mybot_cmd, filters.command("mybot") & filters.private))
 app.add_handler(CallbackQueryHandler(mybot_toggle_cb, filters.regex(r"^mybot_toggle:")))
 app.add_handler(CallbackQueryHandler(mybot_delete_cb, filters.regex(r"^mybot_delete:")))

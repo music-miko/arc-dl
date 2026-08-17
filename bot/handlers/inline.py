@@ -135,7 +135,6 @@ async def inline_result_chosen(client, chosen_inline_result: ChosenInlineResult)
     await run_inline_download(client, chosen_inline_result.result_id, chosen_inline_result.inline_message_id)
 
 
-# Reused as-is on every cloned bot too — see bot/handlers/__init__.py:attach_shared_handlers
 HANDLERS = [
     (InlineQueryHandler, inline_search, None),
     (ChosenInlineResultHandler, inline_result_chosen, None),

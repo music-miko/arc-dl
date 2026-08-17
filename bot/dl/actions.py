@@ -2,6 +2,8 @@
 # Licensed under the MIT License.
 
 
+import asyncio
+
 from pyrogram import Client
 
 from .. import LOGGER
@@ -10,6 +12,8 @@ from ..utils.classifier import classifier
 from ..utils.texts import DOWNLOADING_TEXT, EXPIRED_TEXT, SENDING_TEXT
 from .api_client import YTAPIError, yt_api
 from .downloader import downloader
+
+INLINE_PIPELINE_TIMEOUT = 480.0
 
 
 async def resolve_cdn(entry: dict) -> tuple[str, dict]:
@@ -122,36 +126,17 @@ async def run_inline_download(client: Client, token: str, inline_message_id: str
     cache_entry["_delivering"] = True
 
     try:
-        entry = cache_entry
-        platform, title, artist = _resolve_title_artist(entry)
-        duration = entry.get("duration")
-        thumbnail = entry.get("thumbnail")
-
-        await _safe_edit_inline(client, inline_message_id, f"{DOWNLOADING_TEXT} {title}")
-
-        cdn_url, entry = await resolve_cdn(entry)
-        title = entry.get("title") or title
-        thumbnail = entry.get("thumbnail") or thumbnail
-        duration = entry.get("duration") or duration
-
-        if not cdn_url:
-            raise YTAPIError("No download link returned")
-
-        await _safe_edit_inline(client, inline_message_id, f"{SENDING_TEXT} {title}")
-
-        await downloader.deliver_inline(
-            client, inline_message_id, cdn_url,
-            title=title, artist=artist, duration=duration,
-            thumbnail_url=thumbnail, platform=platform,
+        await asyncio.wait_for(
+            _deliver_inline_pipeline(client, inline_message_id, cache_entry),
+            timeout=INLINE_PIPELINE_TIMEOUT,
         )
-
+    except asyncio.TimeoutError:
+        LOGGER.warning("Inline download timed out for token=%s", token)
+        await _safe_edit_inline(client, inline_message_id, "Failed: this took too long to fetch. Please try again.")
     except YTAPIError as e:
         LOGGER.warning("Inline download failed for token=%s: %s", token, e)
         await _safe_edit_inline(client, inline_message_id, f"Failed: {e}")
     except RuntimeError as e:
-        # Raised with an already user-facing message (e.g. relay/setup
-        # issues from deliver_inline) — show it as-is, no "Something went
-        # wrong" prefix needed.
         LOGGER.warning("Inline delivery failed for token=%s: %s", token, e)
         await _safe_edit_inline(client, inline_message_id, str(e))
     except Exception as e:
@@ -161,11 +146,35 @@ async def run_inline_download(client: Client, token: str, inline_message_id: str
         cache_entry["_delivering"] = False
 
 
+async def _deliver_inline_pipeline(client: Client, inline_message_id: str, entry: dict) -> None:
+    platform, title, artist = _resolve_title_artist(entry)
+    duration = entry.get("duration")
+    thumbnail = entry.get("thumbnail")
+
+    await _safe_edit_inline(client, inline_message_id, f"{DOWNLOADING_TEXT} {title}")
+
+    cdn_url, entry = await resolve_cdn(entry)
+    title = entry.get("title") or title
+    thumbnail = entry.get("thumbnail") or thumbnail
+    duration = entry.get("duration") or duration
+
+    if not cdn_url:
+        raise YTAPIError("No download link returned")
+
+    await _safe_edit_inline(client, inline_message_id, f"{SENDING_TEXT} {title}")
+
+    await downloader.deliver_inline(
+        client, inline_message_id, cdn_url,
+        title=title, artist=artist, duration=duration,
+        thumbnail_url=thumbnail, platform=platform,
+    )
+
+
 async def _safe_edit_inline(client: Client, inline_message_id: str, text: str) -> None:
     try:
         await client.edit_inline_text(inline_message_id, text)
-    except Exception:
-        pass
+    except Exception as e:
+        LOGGER.debug("Could not edit inline message %s: %s", inline_message_id, e)
 
 
 async def _update_status(status, text: str) -> None:
@@ -173,5 +182,5 @@ async def _update_status(status, text: str) -> None:
         return
     try:
         await status.edit_text(text)
-    except Exception:
-        pass
+    except Exception as e:
+        LOGGER.debug("Could not edit status message: %s", e)

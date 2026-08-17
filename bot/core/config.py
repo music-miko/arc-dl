@@ -14,8 +14,6 @@ class Config:
         self.api_id = int(os.getenv("API_ID", "0"))
         self.api_hash = os.getenv("API_HASH", "")
         self.bot_token = os.getenv("BOT_TOKEN", "")
-        # Bot's own numeric user ID — the part of the token before the colon.
-        # Used to tell "am I the main bot or a clone?" without an extra API call.
         self.bot_id = int(self.bot_token.split(":")[0]) if ":" in self.bot_token else 0
 
         self.api_url = os.getenv("API_URL", "https://api.arcmusic.fun").rstrip("/")

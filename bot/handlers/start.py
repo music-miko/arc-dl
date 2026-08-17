@@ -17,7 +17,7 @@ from ..utils.texts import CLONE_HINT_TEXT, PRIVACY_TEXT, START_TEXT
 
 def _suggest_username(user) -> str:
     base = re.sub(r"[^a-zA-Z0-9]", "", (user.first_name or "user")).lower()[:20] or "user"
-    return f"{base}_arcdl_bot"[:32]
+    return f"{base}_arc_downloader_bot"[:32]
 
 
 def _clone_keyboard(user) -> ReplyKeyboardMarkup:
@@ -27,7 +27,7 @@ def _clone_keyboard(user) -> ReplyKeyboardMarkup:
                 "🤖 Clone this bot",
                 request_managed_bot=KeyboardButtonRequestManagedBot(
                     button_id=1,
-                    suggested_name=f"{(user.first_name or 'My').strip()}'s Arc-DL"[:64],
+                    suggested_name=f"{(user.first_name or 'My').strip()}'s Arc Downloader"[:64],
                     suggested_username=_suggest_username(user),
                 ),
             )
@@ -50,9 +50,6 @@ async def start_cmd(client, message: Message):
             reply_markup=_clone_keyboard(user) if user else None,
         )
     else:
-        # Clones get the plain "Add to Group" inline button instead — a
-        # reply keyboard (needed for the Clone button above) and an inline
-        # keyboard can't both be attached to the same message.
         await message.reply_text(text, reply_markup=keyboards.start_keyboard(client.me.username or ""))
 
 
@@ -60,7 +57,6 @@ async def privacy_cmd(client, message: Message):
     await message.reply_text(PRIVACY_TEXT)
 
 
-# Reused as-is on every cloned bot too — see bot/handlers/__init__.py:attach_shared_handlers
 HANDLERS = [
     (MessageHandler, start_cmd, filters.command("start") & filters.private),
     (MessageHandler, privacy_cmd, filters.command("privacy") & filters.private),

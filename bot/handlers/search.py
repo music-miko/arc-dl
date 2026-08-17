@@ -139,7 +139,6 @@ async def handle_text(client, message: Message):
         await message.reply_text(f"Something went wrong: {e}")
 
 
-# Reused as-is on every cloned bot too — see bot/handlers/__init__.py:attach_shared_handlers
 HANDLERS = [
     (MessageHandler, handle_text, filters.private & filters.text & ~filters.via_bot & not_command_filter),
 ]

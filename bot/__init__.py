@@ -6,7 +6,7 @@ import logging
 import sys
 
 __version__ = "1.0.0"
-__bot_name__ = "ArcDLBot"
+__bot_name__ = "Arc Downloader"
 
 logging.basicConfig(
     level=logging.INFO,

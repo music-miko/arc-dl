@@ -18,47 +18,44 @@ from .. import LOGGER
 from ..utils.format import duration_to_seconds, guess_kind_from_ext, sanitize_filename, truncate
 from ..utils.keyboards import keyboards
 from ..utils.mime import sniffer
-from .ffmpeg import ensure_audio
-
-_CDN_HEADERS = {
-    "User-Agent": (
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-        "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
-    ),
-    "Accept": "*/*",
-}
-
-_OK_STATUSES = {200, 206}
-
-_FETCH_RETRIES = 2
+from .ffmpeg import ensure_audio, probe_video_meta
 
 
 class MediaDownloader:
     def __init__(self):
         self.download_dir = "downloads"
         self.fetch_timeout = 300.0
+        self.fetch_retries = 2
+        self.ok_statuses = {200, 206}
+        self.cdn_headers = {
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+            ),
+            "Accept": "*/*",
+        }
         self.telegram_cdn_re = re.compile(r"https?://(?:t\.me|telegram\.dog)/([^/]+)/(\d+)")
         os.makedirs(self.download_dir, exist_ok=True)
 
     async def _download_http(self, url: str, dest_path_no_ext: str) -> tuple[str, str]:
         last_error: Exception | None = None
 
-        for attempt in range(1, _FETCH_RETRIES + 1):
+        for attempt in range(1, self.fetch_retries + 1):
             try:
                 return await self._download_http_once(url, dest_path_no_ext)
             except (RuntimeError, aiohttp.ClientError, asyncio.TimeoutError) as e:
                 last_error = e
-                if attempt < _FETCH_RETRIES:
-                    LOGGER.warning("CDN fetch failed (attempt %d/%d): %s — retrying", attempt, _FETCH_RETRIES, e)
+                if attempt < self.fetch_retries:
+                    LOGGER.warning("CDN fetch failed (attempt %d/%d): %s — retrying", attempt, self.fetch_retries, e)
                     await asyncio.sleep(1.5)
 
-        raise RuntimeError(f"CDN fetch failed after {_FETCH_RETRIES} attempts: {last_error}")
+        raise RuntimeError(f"CDN fetch failed after {self.fetch_retries} attempts: {last_error}")
 
     async def _download_http_once(self, url: str, dest_path_no_ext: str) -> tuple[str, str]:
         timeout = aiohttp.ClientTimeout(total=self.fetch_timeout)
-        async with aiohttp.ClientSession(headers=_CDN_HEADERS) as session:
+        async with aiohttp.ClientSession(headers=self.cdn_headers) as session:
             async with session.get(url, timeout=timeout) as r:
-                if r.status not in _OK_STATUSES:
+                if r.status not in self.ok_statuses:
                     raise RuntimeError(f"CDN returned HTTP {r.status}")
 
                 ext = ""
@@ -143,7 +140,7 @@ class MediaDownloader:
 
     async def _fetch_and_prepare(
         self, client: Client, cdn_url: str, title: str, platform: str,
-    ) -> tuple[str, str, str]:
+    ) -> tuple[str, str, str, int, int, int]:
         job_id = uuid.uuid4().hex[:12]
         raw_base = os.path.join(self.download_dir, job_id)
 
@@ -163,7 +160,7 @@ class MediaDownloader:
             safe_name = sanitize_filename(title)
             final_path = os.path.join(self.download_dir, f"{job_id}_{safe_name}{audio_ext}")
             os.replace(audio_path, final_path)
-            return final_path, audio_ext, "audio"
+            return final_path, audio_ext, "audio", 0, 0, 0
 
         kind = guess_kind_from_ext(ext)
         if kind == "document":
@@ -176,7 +173,12 @@ class MediaDownloader:
         final_path = os.path.join(self.download_dir, f"{job_id}_{safe_name}{ext}")
         if os.path.abspath(path) != os.path.abspath(final_path):
             os.replace(path, final_path)
-        return final_path, ext, kind
+
+        width = height = probed_duration = 0
+        if kind == "video":
+            width, height, probed_duration = await probe_video_meta(final_path)
+
+        return final_path, ext, kind, width, height, probed_duration
 
     def _cleanup(self, *paths: str | None) -> None:
         for p in paths:
@@ -199,23 +201,28 @@ class MediaDownloader:
         thumb_path = os.path.join(self.download_dir, f"{uuid.uuid4().hex[:12]}.jpg")
         file_path = None
         try:
-            file_path, ext, kind = await self._fetch_and_prepare(client, cdn_url, title, platform)
+            file_path, ext, kind, width, height, probed_duration = await self._fetch_and_prepare(
+                client, cdn_url, title, platform
+            )
             thumb = await self._download_thumbnail(thumbnail_url, thumb_path) if kind in ("audio", "video") else None
             caption = self._build_caption(title, artist)
             safe_name = sanitize_filename(title) + ext
+            resolved_duration = duration_to_seconds(duration) or probed_duration
 
             if kind == "audio":
                 await client.send_audio(
                     chat_id, audio=file_path, file_name=safe_name,
                     title=title[:60] if title else None,
                     performer=artist[:60] if artist else None,
-                    duration=duration_to_seconds(duration),
+                    duration=resolved_duration,
                     thumb=thumb, caption=caption,
                 )
             elif kind == "video":
                 await client.send_video(
                     chat_id, video=file_path, file_name=safe_name,
-                    duration=duration_to_seconds(duration),
+                    duration=resolved_duration,
+                    width=width, height=height,
+                    supports_streaming=True,
                     thumb=thumb, caption=caption,
                 )
             elif kind == "photo":
@@ -237,20 +244,16 @@ class MediaDownloader:
         thumbnail_url: str | None = None,
         platform: str = "youtube",
     ) -> None:
-        """Edits the inline message in place with the downloaded file.
-
-        Kurigram's edit_inline_media uploads a fresh local file straight
-        over MTProto (messages.UploadMedia against InputPeerSelf, then
-        messages.EditInlineBotMessage) — there's no need to relay the file
-        through some other chat first to obtain a file_id. Same local file,
-        same code path as a normal chat delivery."""
         thumb_path = os.path.join(self.download_dir, f"{uuid.uuid4().hex[:12]}.jpg")
         file_path = None
         try:
-            file_path, ext, kind = await self._fetch_and_prepare(client, cdn_url, title, platform)
+            file_path, ext, kind, width, height, probed_duration = await self._fetch_and_prepare(
+                client, cdn_url, title, platform
+            )
             thumb = await self._download_thumbnail(thumbnail_url, thumb_path) if kind in ("audio", "video") else None
             caption = self._build_caption(title, artist)
             safe_name = sanitize_filename(title) + ext
+            resolved_duration = duration_to_seconds(duration) or probed_duration
 
             if kind == "audio":
                 media = InputMediaAudio(
@@ -259,7 +262,7 @@ class MediaDownloader:
                     caption=caption,
                     title=truncate(title, 60) if title else None,
                     performer=truncate(artist, 60) if artist else "",
-                    duration=duration_to_seconds(duration),
+                    duration=resolved_duration,
                     file_name=safe_name,
                 )
             elif kind == "video":
@@ -267,7 +270,10 @@ class MediaDownloader:
                     media=file_path,
                     thumb=thumb,
                     caption=caption,
-                    duration=duration_to_seconds(duration),
+                    duration=resolved_duration,
+                    width=width,
+                    height=height,
+                    supports_streaming=True,
                     file_name=safe_name,
                 )
             elif kind == "photo":

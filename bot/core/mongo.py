@@ -50,7 +50,6 @@ class MongoDB:
     async def remove_user(self, user_id: int) -> None:
         await self.users.delete_one({"_id": user_id})
 
-    # --- Cloned (Managed) bots ---
 
     async def save_clone(self, bot_id: int, owner_id: int, username: str | None, token: str) -> None:
         await self.clones.update_one(

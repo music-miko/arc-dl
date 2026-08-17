@@ -50,7 +50,6 @@ async def noop_cb(client, callback_query: CallbackQuery):
     await callback_query.answer()
 
 
-# Reused as-is on every cloned bot too — see bot/handlers/__init__.py:attach_shared_handlers
 HANDLERS = [
     (CallbackQueryHandler, download_cb, filters.regex(r"^dl:")),
     (CallbackQueryHandler, paginate_cb, filters.regex(r"^list:")),
