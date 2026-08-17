@@ -15,6 +15,7 @@ from pyrogram.errors import RPCError
 from pyrogram.types import InputMediaAudio, InputMediaDocument, InputMediaPhoto, InputMediaVideo
 
 from .. import LOGGER
+from ..core.config import config
 from ..utils.format import duration_to_seconds, guess_kind_from_ext, sanitize_filename, truncate
 from ..utils.keyboards import keyboards
 from ..utils.mime import sniffer
@@ -34,7 +35,9 @@ class MediaDownloader:
             ),
             "Accept": "*/*",
         }
-        self.telegram_cdn_re = re.compile(r"https?://(?:t\.me|telegram\.dog)/([^/]+)/(\d+)")
+        self.telegram_cdn_re = re.compile(
+            r"https?://(?:t\.me|telegram\.dog)/(?P<uname>[A-Za-z0-9_]+)/(?P<mid>\d+)"
+        )
         os.makedirs(self.download_dir, exist_ok=True)
 
     async def _download_http(self, url: str, dest_path_no_ext: str) -> tuple[str, str]:
@@ -89,23 +92,58 @@ class MediaDownloader:
 
                 return dest_path, ext
 
-    async def _download_telegram_cdn(self, client: Client, cdn_url: str, dest_path_no_ext: str) -> tuple[str, str]:
+    # Ordered so the more specific media types are matched first; each maps
+    # to the "kind" our pipeline understands (audio / video / photo / document).
+    _TELEGRAM_MEDIA_KINDS: tuple[tuple[str, str], ...] = (
+        ("audio", "audio"),
+        ("voice", "audio"),
+        ("video", "video"),
+        ("animation", "video"),
+        ("photo", "photo"),
+        ("video_note", "video"),
+        ("document", "document"),
+        ("sticker", "document"),
+    )
+
+    def _detect_message_media(self, msg) -> tuple[object | None, str | None]:
+        """A cached Telegram message may hold audio, video, a photo, an
+        animation, or a plain document — not just audio/document/voice.
+        Check every kind pyrogram supports so nothing gets missed."""
+        if not msg:
+            return None, None
+        for attr, kind in self._TELEGRAM_MEDIA_KINDS:
+            media = getattr(msg, attr, None)
+            if media:
+                return media, kind
+        return None, None
+
+    def _resolve_telegram_link(self, cdn_url: str) -> tuple[str, int] | None:
         m = self.telegram_cdn_re.match(cdn_url)
         if not m:
-            raise RuntimeError(f"Unrecognized Telegram cdn link: {cdn_url}")
-        username, message_id = m.group(1), int(m.group(2))
+            return None
+        return m.group("uname"), int(m.group("mid"))
 
-        msg = await client.get_messages(username, message_id)
-        media = msg and (msg.audio or msg.document or msg.voice)
+    async def _download_telegram_cdn(self, client: Client, cdn_url: str, dest_path_no_ext: str) -> tuple[str, str, str]:
+        resolved = self._resolve_telegram_link(cdn_url)
+        if not resolved:
+            raise RuntimeError(f"Unrecognized Telegram cdn link: {cdn_url}")
+        username, message_id = resolved
+
+        try:
+            msg = await client.get_messages(username, message_id)
+        except RPCError as e:
+            raise RuntimeError(f"Couldn't access the cached Telegram file: {e}") from e
+
+        media, kind = self._detect_message_media(msg)
         if not media:
             raise RuntimeError("Cached Telegram message has no downloadable media")
 
-        ext = self._extension_from_media(msg, media)
+        ext = self._extension_from_media(msg, media, kind)
         dest_path = dest_path_no_ext + ext
         await client.download_media(msg, file_name=dest_path)
-        return dest_path, ext
+        return dest_path, ext, kind
 
-    def _extension_from_media(self, msg, media) -> str:
+    def _extension_from_media(self, msg, media, kind: str) -> str:
         if msg.voice:
             return ".ogg"
         file_name = getattr(media, "file_name", None)
@@ -115,7 +153,9 @@ class MediaDownloader:
         for ext, mime in sniffer.ext_mime.items():
             if mime == mime_type:
                 return ext
-        return ".bin"
+        # Photo/animation/video_note objects don't carry file_name or
+        # mime_type at all — fall back to a sane default for the kind.
+        return {"photo": ".jpg", "video": ".mp4", "audio": ".mp3"}.get(kind, ".bin")
 
     async def _download_thumbnail(self, url: str | None, dest_path: str) -> str | None:
         if not url:
@@ -144,8 +184,12 @@ class MediaDownloader:
         job_id = uuid.uuid4().hex[:12]
         raw_base = os.path.join(self.download_dir, job_id)
 
+        # An Arc API "cdn" value is either a direct HTTP(S) URL to the raw
+        # file, or a t.me link pointing at a message Arc already cached on
+        # Telegram. These need entirely different retrieval paths.
+        known_kind: str | None = None
         if self.telegram_cdn_re.match(cdn_url):
-            path, ext = await self._download_telegram_cdn(client, cdn_url, raw_base)
+            path, ext, known_kind = await self._download_telegram_cdn(client, cdn_url, raw_base)
         else:
             path, ext = await self._download_http(cdn_url, raw_base)
 
@@ -162,7 +206,11 @@ class MediaDownloader:
             os.replace(audio_path, final_path)
             return final_path, audio_ext, "audio", 0, 0, 0
 
-        kind = guess_kind_from_ext(ext)
+        # When the file came from a cached Telegram message we already know
+        # its exact kind (audio/video/photo/document) from the message
+        # itself — no need to guess. Only direct HTTP downloads, where the
+        # extension can be unreliable, fall back to sniffing the file.
+        kind = known_kind or guess_kind_from_ext(ext)
         if kind == "document":
             sniffed = sniffer.sniff_file(path)
             if sniffed:
@@ -233,6 +281,63 @@ class MediaDownloader:
         finally:
             self._cleanup(file_path, thumb_path)
 
+    async def _promote_to_file_id(
+        self,
+        client: Client,
+        *,
+        kind: str,
+        file_path: str,
+        thumb: str | None,
+        title: str,
+        artist: str,
+        duration,
+        width: int,
+        height: int,
+        safe_name: str,
+        caption: str,
+    ) -> tuple[str, str | None]:
+        """Telegram forbids uploading a *new* file when editing an inline message —
+        only a previously-uploaded file_id or a URL is accepted there. So we first
+        send the file as a normal message (raw upload is fine for that) to a log
+        channel the bot administers, then hand back the resulting file_id(s) so
+        the caller can reference them when editing the inline message."""
+        if not config.log_channel_id:
+            raise RuntimeError(
+                "Inline delivery isn't set up yet: the bot admin needs to set "
+                "LOG_CHANNEL_ID (a private channel this bot is admin in) — "
+                "Telegram doesn't allow sending files directly into inline results."
+            )
+
+        try:
+            if kind == "audio":
+                msg = await client.send_audio(
+                    config.log_channel_id, audio=file_path, file_name=safe_name,
+                    title=title[:60] if title else None,
+                    performer=artist[:60] if artist else None,
+                    duration=duration, thumb=thumb, caption=caption,
+                )
+                media_obj, thumbs = msg.audio, msg.audio.thumbs
+            elif kind == "video":
+                msg = await client.send_video(
+                    config.log_channel_id, video=file_path, file_name=safe_name,
+                    duration=duration, width=width, height=height,
+                    supports_streaming=True, thumb=thumb, caption=caption,
+                )
+                media_obj, thumbs = msg.video, msg.video.thumbs
+            elif kind == "photo":
+                msg = await client.send_photo(config.log_channel_id, photo=file_path, caption=caption)
+                media_obj, thumbs = msg.photo, None
+            else:
+                msg = await client.send_document(
+                    config.log_channel_id, document=file_path, file_name=safe_name, caption=caption,
+                )
+                media_obj, thumbs = msg.document, msg.document.thumbs
+        except RPCError as e:
+            raise RuntimeError(f"Couldn't stage the file for inline delivery: {e}") from e
+
+        thumb_file_id = thumbs[-1].file_id if thumbs else None
+        return media_obj.file_id, thumb_file_id
+
     async def deliver_inline(
         self,
         client: Client,
@@ -255,10 +360,21 @@ class MediaDownloader:
             safe_name = sanitize_filename(title) + ext
             resolved_duration = duration_to_seconds(duration) or probed_duration
 
+            # Step 1: raw-upload the file into the log channel (normal send, allowed)
+            # to obtain a reusable file_id.
+            media_file_id, thumb_file_id = await self._promote_to_file_id(
+                client,
+                kind=kind, file_path=file_path, thumb=thumb,
+                title=title, artist=artist, duration=resolved_duration,
+                width=width, height=height, safe_name=safe_name, caption=caption,
+            )
+
+            # Step 2: edit the inline message using the file_id — this is what
+            # Telegram actually permits for inline media edits.
             if kind == "audio":
                 media = InputMediaAudio(
-                    media=file_path,
-                    thumb=thumb,
+                    media=media_file_id,
+                    thumb=thumb_file_id,
                     caption=caption,
                     title=truncate(title, 60) if title else None,
                     performer=truncate(artist, 60) if artist else "",
@@ -267,8 +383,8 @@ class MediaDownloader:
                 )
             elif kind == "video":
                 media = InputMediaVideo(
-                    media=file_path,
-                    thumb=thumb,
+                    media=media_file_id,
+                    thumb=thumb_file_id,
                     caption=caption,
                     duration=resolved_duration,
                     width=width,
@@ -277,9 +393,9 @@ class MediaDownloader:
                     file_name=safe_name,
                 )
             elif kind == "photo":
-                media = InputMediaPhoto(media=file_path, caption=caption)
+                media = InputMediaPhoto(media=media_file_id, caption=caption)
             else:
-                media = InputMediaDocument(media=file_path, caption=caption, file_name=safe_name)
+                media = InputMediaDocument(media=media_file_id, caption=caption, file_name=safe_name)
 
             try:
                 await client.edit_inline_media(inline_message_id, media=media)
