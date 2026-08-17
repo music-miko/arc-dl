@@ -36,6 +36,16 @@ class MediaDownloader:
         self.telegram_cdn_re = re.compile(
             r"https?://(?:t\.me|telegram\.dog)/(?P<uname>[A-Za-z0-9_]+)/(?P<mid>\d+)"
         )
+        self.telegram_media_kinds = (
+            ("audio", "audio"),
+            ("voice", "audio"),
+            ("video", "video"),
+            ("animation", "video"),
+            ("photo", "photo"),
+            ("video_note", "video"),
+            ("document", "document"),
+            ("sticker", "document"),
+        )
         os.makedirs(self.download_dir, exist_ok=True)
 
     async def _download_http(self, url: str, dest_path_no_ext: str) -> tuple[str, str]:
@@ -90,26 +100,10 @@ class MediaDownloader:
 
                 return dest_path, ext
 
-    # Ordered so the more specific media types are matched first; each maps
-    # to the "kind" our pipeline understands (audio / video / photo / document).
-    _TELEGRAM_MEDIA_KINDS: tuple[tuple[str, str], ...] = (
-        ("audio", "audio"),
-        ("voice", "audio"),
-        ("video", "video"),
-        ("animation", "video"),
-        ("photo", "photo"),
-        ("video_note", "video"),
-        ("document", "document"),
-        ("sticker", "document"),
-    )
-
     def _detect_message_media(self, msg) -> tuple[object | None, str | None]:
-        """A cached Telegram message may hold audio, video, a photo, an
-        animation, or a plain document — not just audio/document/voice.
-        Check every kind pyrogram supports so nothing gets missed."""
         if not msg:
             return None, None
-        for attr, kind in self._TELEGRAM_MEDIA_KINDS:
+        for attr, kind in self.telegram_media_kinds:
             media = getattr(msg, attr, None)
             if media:
                 return media, kind
@@ -151,8 +145,6 @@ class MediaDownloader:
         for ext, mime in sniffer.ext_mime.items():
             if mime == mime_type:
                 return ext
-        # Photo/animation/video_note objects don't carry file_name or
-        # mime_type at all — fall back to a sane default for the kind.
         return {"photo": ".jpg", "video": ".mp4", "audio": ".mp3"}.get(kind, ".bin")
 
     async def _download_thumbnail(self, url: str | None, dest_path: str) -> str | None:
@@ -182,9 +174,6 @@ class MediaDownloader:
         job_id = uuid.uuid4().hex[:12]
         raw_base = os.path.join(self.download_dir, job_id)
 
-        # An Arc API "cdn" value is either a direct HTTP(S) URL to the raw
-        # file, or a t.me link pointing at a message Arc already cached on
-        # Telegram. These need entirely different retrieval paths.
         known_kind: str | None = None
         if self.telegram_cdn_re.match(cdn_url):
             path, ext, known_kind = await self._download_telegram_cdn(client, cdn_url, raw_base)
@@ -204,10 +193,6 @@ class MediaDownloader:
             os.replace(audio_path, final_path)
             return final_path, audio_ext, "audio", 0, 0, 0
 
-        # When the file came from a cached Telegram message we already know
-        # its exact kind (audio/video/photo/document) from the message
-        # itself — no need to guess. Only direct HTTP downloads, where the
-        # extension can be unreliable, fall back to sniffing the file.
         kind = known_kind or guess_kind_from_ext(ext)
         if kind == "document":
             sniffed = sniffer.sniff_file(path)

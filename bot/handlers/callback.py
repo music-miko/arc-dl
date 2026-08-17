@@ -14,10 +14,6 @@ from ..utils.texts import STARTING_TEXT
 
 
 async def download_cb(client, callback_query: CallbackQuery):
-    # "dl:" buttons only ever come from the private/group search & playlist
-    # flows (search.py, results_keyboard/paginated_results_keyboard) — inline
-    # mode now answers with the CDN url directly and never attaches one of
-    # these buttons, so there's no inline_message_id case to handle here.
     if not callback_query.message:
         await callback_query.answer("This result has expired. Please search again.", show_alert=True)
         return

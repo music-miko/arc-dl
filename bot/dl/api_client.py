@@ -107,14 +107,6 @@ class YTAPIClient:
         return await self._poll_job(data["job_id"])
 
     async def try_download_youtube(self, video_id: str) -> dict | None:
-        """Cache-only lookup for latency-sensitive callers (inline queries).
-
-        `/youtube/v2/download` always tries a cheap Mongo/disk cache check
-        before ever queuing a scrape job, and hands back `job_id: None`
-        immediately when that check hits. This calls it exactly once and
-        never falls into `_poll_job()` — a cache miss (job queued) just
-        returns None instead of waiting around for the scrape to finish.
-        """
         data = await self._get("/youtube/v2/download", {"query": video_id, "isVideo": False})
         if data.get("job_id") is not None:
             return None

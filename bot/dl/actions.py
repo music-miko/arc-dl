@@ -112,16 +112,6 @@ async def run_download(client: Client, token: str, *, chat_id: int, status=None)
 
 
 async def resolve_cdn_fast(entry: dict) -> tuple[str, dict] | None:
-    """Inline-safe variant of resolve_cdn().
-
-    Inline queries must be answered in a couple of seconds, so this never
-    waits on a background scrape job the way resolve_cdn()/download_youtube()
-    can. It either hands back a CDN url right away (cache hit, or a platform
-    that's always a single fast HTTP call — Spotify/SoundCloud/social), or
-    returns None so the caller can leave that result out of the answer
-    entirely, instead of showing a "Fetching..." placeholder that has
-    nothing behind it yet.
-    """
     if entry.get("cdn"):
         return entry["cdn"], entry
 

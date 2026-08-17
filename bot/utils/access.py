@@ -10,9 +10,10 @@ from ..core.config import config
 
 class AdminGuard:
     def __init__(self):
-        self.filter = filters.create(self._check)
+        self.filter = filters.create(self._is_admin)
 
-    def _check(self, _, __, message: Message) -> bool:
+    @staticmethod
+    def _is_admin(_, __, message: Message) -> bool:
         return bool(message.from_user and message.from_user.id in config.sudo_users)
 
 
