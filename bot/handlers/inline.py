@@ -28,7 +28,7 @@ _DEFAULT_THUMB = "https://placehold.co/200x200/png?text=No+Thumbnail"
 # Bounds how long we'll wait on any single candidate's CDN resolve before
 # giving up on it — keeps the overall inline answer snappy even if one
 # platform is slow.
-_RESOLVE_TIMEOUT = 10.0
+_RESOLVE_TIMEOUT = 60.0
 
 
 def _youtube_thumb(video_id: str) -> str:
