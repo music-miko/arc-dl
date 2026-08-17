@@ -5,8 +5,6 @@
 from pyrogram.handlers import ChosenInlineResultHandler, InlineQueryHandler
 from pyrogram.types import (
     ChosenInlineResult,
-    InlineKeyboardButton,
-    InlineKeyboardMarkup,
     InlineQuery,
     InlineQueryResultArticle,
     InputTextMessageContent,
@@ -27,12 +25,8 @@ def _youtube_thumb(video_id: str) -> str:
     return f"https://i.ytimg.com/vi/{video_id}/hqdefault.jpg"
 
 
-def _download_keyboard(token: str) -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup([[InlineKeyboardButton("🔄 Retry", callback_data=f"dl:{token}")]])
-
-
 def _placeholder_text(title: str) -> str:
-    return f"{title}\n\nFetching... (stuck? tap Retry below)"
+    return f"{title}\n\nFetching..."
 
 
 def _make_result(*, title: str, description: str = "", entry: dict, thumb_url: str | None = None) -> InlineQueryResultArticle:
@@ -43,7 +37,6 @@ def _make_result(*, title: str, description: str = "", entry: dict, thumb_url: s
         description=truncate(description, 60) if description else None,
         thumb_url=thumb_url or _DEFAULT_THUMB,
         input_message_content=InputTextMessageContent(_placeholder_text(title or "Untitled")),
-        reply_markup=_download_keyboard(token),
     )
 
 
