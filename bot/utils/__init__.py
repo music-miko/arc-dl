@@ -28,8 +28,3 @@ from .texts import (
     UNSUPPORTED_LINK_TEXT,
 )
 from .uptime import UptimeTracker, uptime
-
-# inline_results and search_flow are intentionally not re-exported here: they
-# import from bot.dl, and bot.dl imports back from bot.utils, so pulling them
-# into this package's own __init__ would risk a circular import at startup.
-# Handler modules import them directly, e.g. `from ..utils.inline_results import ...`.
