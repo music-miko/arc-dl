@@ -10,4 +10,4 @@ from .. import LOGGER
 def setup_directories() -> None:
     download_dir = "downloads"
     os.makedirs(download_dir, exist_ok=True)
-    LOGGER.info("Working directory ready -> %s", download_dir)
+    LOGGER.info("Working directory ready")
