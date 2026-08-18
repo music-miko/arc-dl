@@ -20,7 +20,7 @@ class MongoDB:
 
     async def connect(self) -> None:
         await self.client.admin.command("ping")
-        LOGGER.info("Connected to MongoDB -> database '%s'", self.db_name)
+        LOGGER.info("Connected to MongoDB")
 
     async def close(self) -> None:
         self.client.close()
