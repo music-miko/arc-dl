@@ -15,7 +15,7 @@ from .classifier import classifier
 from .format import truncate
 
 SEARCH_LIMIT = 5
-DEFAULT_THUMB = "https://placehold.co/200x200/png?text=No+Thumbnail"
+DEFAULT_THUMB = "https://graph.org/file/d3c072a02035a883a717d-c55ae1cc21e629e39e.jpg"
 
 
 def _youtube_thumb(video_id: str) -> str:
