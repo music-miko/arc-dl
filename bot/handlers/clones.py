@@ -73,9 +73,6 @@ async def mybot_delete_cb(client, callback_query: CallbackQuery):
 
 @app.on_managed_bot()
 async def managed_bot_created(client, managed_bot: ManagedBotUpdated):
-    # Only the main bot ever receives this event: Telegram only grants the
-    # bot_can_manage_bots flag (toggled via @BotFather) to a single manager
-    # bot per managed-bot family, so this can't be attached to clone clients.
     owner, bot = managed_bot.user, managed_bot.bot
 
     try:
