@@ -2,64 +2,41 @@
 # Licensed under the MIT License.
 
 
-import asyncio
-
 from pyrogram import filters
-from pyrogram.errors import FloodWait
+from pyrogram.handlers import MessageHandler
 from pyrogram.types import Message
 
 from ..core.client import app
 from ..core.clones import clones
 from ..core.mongo import mongo
 from ..utils.access import admin_filter
+from ..utils.broadcast import broadcast_to_users
+from ..utils.registry import HandlerRegistry
+from ..utils.stats import format_stats_text
 from ..utils.uptime import uptime
 
+registry = HandlerRegistry(__name__)
 
-@app.on_message(filters.command("stats") & admin_filter)
+
+@registry.on(MessageHandler, filters.command("stats") & admin_filter)
 async def stats_cmd(client, message: Message):
     total_users = await mongo.user_count()
     total_clones = await mongo.clone_count()
     running_clones = len(clones.active)
-    text = (
-        "Bot Stats\n\n"
-        f"Users: {total_users}\n"
-        f"Clones: {total_clones} total, {running_clones} running\n"
-        f"Uptime: {uptime.elapsed_str()}\n"
-    )
-    await message.reply_text(text)
+    await message.reply_text(format_stats_text(total_users, total_clones, running_clones, uptime.elapsed_str()))
 
 
-@app.on_message(filters.command("broadcast") & admin_filter)
+@registry.on(MessageHandler, filters.command("broadcast") & admin_filter)
 async def broadcast_cmd(client, message: Message):
     if not message.reply_to_message:
         await message.reply_text("Reply to the message you want to broadcast with /broadcast.")
         return
 
     user_ids = await mongo.all_user_ids()
-    total = len(user_ids)
-    status = await message.reply_text(f"Broadcasting to {total} users...")
+    status = await message.reply_text(f"Broadcasting to {len(user_ids)} users...")
 
-    sent = failed = 0
-    for i, uid in enumerate(user_ids, start=1):
-        try:
-            await message.reply_to_message.copy(uid)
-            sent += 1
-        except FloodWait as e:
-            await asyncio.sleep(e.value)
-            try:
-                await message.reply_to_message.copy(uid)
-                sent += 1
-            except Exception:
-                failed += 1
-        except Exception:
-            failed += 1
-            await mongo.remove_user(uid)
-
-        if i % 25 == 0:
-            try:
-                await status.edit_text(f"Broadcasting... {i}/{total} (sent {sent}, failed {failed})")
-            except Exception:
-                pass
-        await asyncio.sleep(0.05)
-
+    sent, failed = await broadcast_to_users(message.reply_to_message, user_ids, status)
     await status.edit_text(f"Broadcast finished.\nSent: {sent}\nFailed: {failed}")
+
+
+registry.attach(app)

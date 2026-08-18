@@ -10,9 +10,13 @@ from ..core.client import app
 from ..dl.actions import run_download
 from ..utils.cache import cache
 from ..utils.keyboards import keyboards
+from ..utils.registry import HandlerRegistry
 from ..utils.texts import STARTING_TEXT
 
+registry = HandlerRegistry(__name__)
 
+
+@registry.on(CallbackQueryHandler, filters.regex(r"^dl:"))
 async def download_cb(client, callback_query: CallbackQuery):
     if not callback_query.message:
         await callback_query.answer("This result has expired. Please search again.", show_alert=True)
@@ -24,6 +28,7 @@ async def download_cb(client, callback_query: CallbackQuery):
     await run_download(client, token, chat_id=callback_query.message.chat.id, status=status)
 
 
+@registry.on(CallbackQueryHandler, filters.regex(r"^list:"))
 async def paginate_cb(client, callback_query: CallbackQuery):
     _, list_token, page_str = callback_query.data.split(":", 2)
     page = int(page_str)
@@ -39,15 +44,9 @@ async def paginate_cb(client, callback_query: CallbackQuery):
     )
 
 
+@registry.on(CallbackQueryHandler, filters.regex(r"^noop$"))
 async def noop_cb(client, callback_query: CallbackQuery):
     await callback_query.answer()
 
 
-HANDLERS = [
-    (CallbackQueryHandler, download_cb, filters.regex(r"^dl:")),
-    (CallbackQueryHandler, paginate_cb, filters.regex(r"^list:")),
-    (CallbackQueryHandler, noop_cb, filters.regex(r"^noop$")),
-]
-
-for _cls, _func, _filt in HANDLERS:
-    app.add_handler(_cls(_func, _filt))
+registry.attach(app)

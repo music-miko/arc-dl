@@ -35,6 +35,24 @@ PRIVACY_TEXT = """Privacy
 This isn't a substitute for reading the terms of the services you're downloading from — please respect copyright and each platform's own rules.
 """
 
+NO_CLONES_TEXT = "You haven't cloned this bot yet. Tap Clone this bot in /start to create one."
+YOUR_CLONES_TEXT = "Your cloned bots:"
+
+NOT_YOUR_BOT_TEXT = "This isn't your bot."
+CLONE_STOPPED_TEXT = "Bot stopped."
+CLONE_STARTED_TEXT = "Bot started."
+CLONE_START_FAILED_TEXT = "Couldn't start that bot — its token may have been revoked."
+CLONE_DELETED_TEXT = "Bot deleted."
+
+CLONE_SETUP_FAILED_TEXT = "Something went wrong setting up your cloned bot. Please try again with /start."
+CLONE_LAUNCHED_TEXT = (
+    "Your bot @{username} is live and works just like this one for search, links, and playlists.\n\n"
+    "One manual step to finish: message @BotFather → /setinline → choose @{username} → set a "
+    "placeholder, then /setinlinefeedback → @{username} → 100%. Telegram only lets a bot's owner "
+    "turn these on, so this can't be automated on your behalf.\n\n"
+    "Manage your clones anytime with /mybot."
+)
+
 EXPIRED_TEXT = "This result has expired. Please search again."
 
 PROCESSING_TEXT = "Processing this..."

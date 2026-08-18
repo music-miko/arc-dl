@@ -2,40 +2,22 @@
 # Licensed under the MIT License.
 
 
-import re
-
 from pyrogram import filters
 from pyrogram.handlers import MessageHandler
-from pyrogram.types import KeyboardButton, KeyboardButtonRequestManagedBot, Message, ReplyKeyboardMarkup
+from pyrogram.types import Message
 
 from ..core.client import app
 from ..core.config import config
 from ..core.mongo import mongo
 from ..utils.keyboards import keyboards
+from ..utils.onboarding import build_clone_keyboard
+from ..utils.registry import HandlerRegistry
 from ..utils.texts import CLONE_HINT_TEXT, PRIVACY_TEXT, START_TEXT
 
-
-def _suggest_username(user) -> str:
-    base = re.sub(r"[^a-zA-Z0-9]", "", (user.first_name or "user")).lower()[:20] or "user"
-    return f"{base}_arc_downloader_bot"[:32]
+registry = HandlerRegistry(__name__)
 
 
-def _clone_keyboard(user) -> ReplyKeyboardMarkup:
-    return ReplyKeyboardMarkup(
-        [[
-            KeyboardButton(
-                "🤖 Clone this bot",
-                request_managed_bot=KeyboardButtonRequestManagedBot(
-                    button_id=1,
-                    suggested_name=f"{(user.first_name or 'My').strip()}'s Arc Downloader"[:64],
-                    suggested_username=_suggest_username(user),
-                ),
-            )
-        ]],
-        resize_keyboard=True,
-    )
-
-
+@registry.on(MessageHandler, filters.command("start") & filters.private)
 async def start_cmd(client, message: Message):
     user = message.from_user
     if user:
@@ -47,20 +29,15 @@ async def start_cmd(client, message: Message):
     if is_main:
         await message.reply_text(
             text + CLONE_HINT_TEXT,
-            reply_markup=_clone_keyboard(user) if user else None,
+            reply_markup=build_clone_keyboard(user) if user else None,
         )
     else:
         await message.reply_text(text, reply_markup=keyboards.start_keyboard(client.me.username or ""))
 
 
+@registry.on(MessageHandler, filters.command("privacy") & filters.private)
 async def privacy_cmd(client, message: Message):
     await message.reply_text(PRIVACY_TEXT)
 
 
-HANDLERS = [
-    (MessageHandler, start_cmd, filters.command("start") & filters.private),
-    (MessageHandler, privacy_cmd, filters.command("privacy") & filters.private),
-]
-
-for _cls, _func, _filt in HANDLERS:
-    app.add_handler(_cls(_func, _filt))
+registry.attach(app)

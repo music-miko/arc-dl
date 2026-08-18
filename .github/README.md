@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="../bot/assets/arcdlbot_profile_icon.png" alt="Arc Downloader" width="120" />
+</p>
+
 # Arc Downloader (Part of the [Team Arc](https://telegram.dog/ArcBotz))
 
 A Telegram bot that fetches and delivers media — right into any chat, or straight through inline mode — backed by the [Arc API](https://portal.arcmusic.fun).
@@ -51,6 +55,8 @@ Anyone talking to the main bot can create their own independent copy of Arc Down
 
 Cloning is a main-bot-only capability — a clone can't be used to create further clones or manage anyone else's.
 
+Inline mode and inline feedback are **not** enabled automatically on a freshly cloned bot. Telegram doesn't expose an API for a manager bot to toggle another bot's `/setinline` or `/setinlinefeedback` settings — those remain BotFather-only, owner-gated switches (confirmed against the [Managed bots API](https://core.telegram.org/api/bots/managed-bots), which only exposes token export and access-restriction controls). Arc Downloader tells every new clone owner about this in the "clone launched" message and points them to the same two BotFather commands described below.
+
 ## Requirements
 
 - Python 3.11+
@@ -89,12 +95,13 @@ python3 -m bot
 
 ### Enable inline delivery in @BotFather
 
-For inline results to start downloading automatically the moment a user picks one, inline feedback must be turned on:
+Inline mode itself, and inline feedback, are settings Telegram only lets a bot's owner change — there's no Bot API or MTProto method for a third party (including a manager bot) to flip them, so this step can't be scripted:
 
 1. Message [@BotFather](https://t.me/BotFather)
-2. `/setinlinefeedback` → select your bot → `100%`
+2. `/setinline` → select your bot → set any placeholder text
+3. `/setinlinefeedback` → select your bot → `100%`
 
-Without this, Telegram won't notify the bot when an inline result is chosen, and delivery will only happen if the user manually taps the Retry button.
+Without step 3, Telegram won't notify the bot when an inline result is chosen, and delivery will only happen if the user manually taps the Retry button. This applies to the main bot and to every cloned bot individually — each clone owner needs to do it once for their own bot.
 
 ### Enable the clone feature in @BotFather
 
@@ -107,11 +114,17 @@ Cloning relies on Telegram's managed-bot (Business Bots) capability:
 
 ```
 bot/
+├── assets/        # profile photo used to brand the main bot and every clone
 ├── core/          # client, config, mongo, clone manager, filesystem setup
 ├── dl/            # Arc API client, download/delivery pipeline, ffmpeg helpers
-├── handlers/      # message, inline, callback, clone, and admin command handlers
-└── utils/         # caching, classification, keyboards, text, formatting
+├── handlers/      # thin Pyrogram entry points only — one file per update type,
+│                  # each declaring a HandlerRegistry and delegating to bot/utils
+└── utils/         # caching, classification, keyboards, text, formatting, and
+                   # every handler's business logic (search dispatch, inline
+                   # result building, clone UI, broadcast, onboarding, stats)
 ```
+
+Each handler module (`bot/handlers/*.py`) only wires Pyrogram update types to plain functions via a small `HandlerRegistry` — see `bot/utils/registry.py`. All actual logic lives in `bot/utils/`, so a handler file is never more than the registration boilerplate plus a couple of lines forwarding to a utility function.
 
 ## License
 

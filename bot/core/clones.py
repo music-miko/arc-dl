@@ -16,7 +16,7 @@ class CloneManager:
     def __init__(self):
         self.active: dict[int, Client] = {}
         self.profile_photo_path = os.path.join(
-            os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
+            os.path.dirname(os.path.dirname(__file__)),
             "assets", "arcdlbot_profile_icon.png",
         )
         self.bot_short_description = (

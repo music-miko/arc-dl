@@ -5,11 +5,16 @@
 from .. import LOGGER
 from . import admin, callback, clones, inline, search, start
 
+SHARED_MODULES = (start, search, callback, inline)
+MAIN_ONLY_MODULES = (admin, clones)
+
 
 def attach_shared_handlers(client) -> None:
-    for module in (start, search, callback, inline):
-        for handler_cls, func, filt in module.HANDLERS:
-            client.add_handler(handler_cls(func, filt))
+    for module in SHARED_MODULES:
+        module.registry.attach(client)
 
 
-LOGGER.info("Handlers loaded -> start, search, callback, inline, admin, clones")
+LOGGER.info(
+    "Handlers loaded -> %s",
+    ", ".join(m.__name__.rsplit(".", 1)[-1] for m in SHARED_MODULES + MAIN_ONLY_MODULES),
+)
