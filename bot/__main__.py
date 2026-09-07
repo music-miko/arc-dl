@@ -18,7 +18,7 @@ async def main() -> None:
     await mongo.connect()
     await yt_api.get_session()
 
-    await app.start()
+    app.start()
 
     from . import handlers
 
@@ -34,7 +34,7 @@ async def main() -> None:
             with suppress(Exception):
                 await clones.stop(bot_id)
         with suppress(Exception):
-            await app.stop()
+            app.stop()
         with suppress(Exception):
             await yt_api.close()
         with suppress(Exception):
