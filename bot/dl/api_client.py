@@ -31,6 +31,8 @@ class YTAPIClient:
             "bluesky": "download_bluesky",
             "tiktok": "download_tiktok",
             "twitter": "download_twitter",
+            "pinterest": "download_pinterest",
+            "reddit": "download_reddit",
         }
 
     async def get_session(self) -> aiohttp.ClientSession:
@@ -158,6 +160,31 @@ class YTAPIClient:
 
     async def download_twitter(self, url: str) -> dict:
         return await self._download_social("/twitter/download", url)
+
+    async def download_pinterest(self, url: str) -> dict:
+        return await self._download_social("/pinterest/download", url)
+
+    async def download_reddit(self, url: str) -> dict:
+        return await self._download_social("/reddit/download", url)
+
+    # -- Terabox: unlike the platforms above, a single link can resolve to
+    # multiple files, each with several stream qualities, so it gets its
+    # own dedicated flow (see dl/terabox_flow.py) instead of going through
+    # resolve_cdn's single-cdn path.
+    async def download_terabox(self, url: str) -> dict:
+        return await self._get("/terabox/download", {"url": url})
+
+    async def search_applemusic(self, url: str) -> dict:
+        return await self._get("/applemusic/search", {"url": url})
+
+    async def download_applemusic(self, url: str) -> dict:
+        return await self._get("/applemusic/download", {"url": url})
+
+    async def search_jiosaavn(self, url: str) -> dict:
+        return await self._get("/jiosaavn/search", {"url": url})
+
+    async def download_jiosaavn(self, url: str) -> dict:
+        return await self._get("/jiosaavn/download", {"url": url})
 
 
 yt_api = YTAPIClient()

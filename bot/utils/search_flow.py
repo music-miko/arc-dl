@@ -2,10 +2,11 @@
 # Licensed under the MIT License.
 
 
-from pyrogram.types import Message
+from ftmgram.types import Message
 
 from ..dl.actions import run_download
 from ..dl.api_client import YTAPIError, yt_api
+from ..dl.terabox_flow import run_terabox_download
 from .cache import cache
 from .keyboards import keyboards
 from .texts import NO_RESULTS_TEXT, STARTING_TEXT, UNSUPPORTED_LINK_TEXT
@@ -94,6 +95,50 @@ async def dispatch_query(client, message: Message, kind: str, value: str) -> Non
         await start_single_download(client, message, {
             "type": kind, "url": value, "title": kind.capitalize(),
         })
+
+    elif kind == "applemusic_track":
+        await start_single_download(client, message, {
+            "type": "applemusic", "url": value, "title": "Apple Music Track",
+        })
+
+    elif kind == "applemusic_playlist":
+        data = await yt_api.search_applemusic(value)
+        tracks = (data or {}).get("tracks", [])
+        await show_paginated_list(
+            message, f"Apple Music - {len(tracks)} track(s). Tap to download:",
+            tracks,
+            lambda t: {
+                "type": "applemusic", "url": t.get("track_url"),
+                "title": t.get("title"), "artist": t.get("artist"),
+                "duration": t.get("duration"), "thumbnail": t.get("thumbnail"),
+            },
+        )
+
+    elif kind == "jiosaavn_track":
+        await start_single_download(client, message, {
+            "type": "jiosaavn", "url": value, "title": "JioSaavn Track",
+        })
+
+    elif kind == "jiosaavn_playlist":
+        data = await yt_api.search_jiosaavn(value)
+        tracks = (data or {}).get("tracks", [])
+        await show_paginated_list(
+            message, f"JioSaavn - {len(tracks)} track(s). Tap to download:",
+            tracks,
+            lambda t: {
+                "type": "jiosaavn", "url": t.get("song_url"),
+                "title": t.get("title"), "duration": t.get("duration"),
+                "thumbnail": t.get("thumbnail"),
+            },
+        )
+
+    elif kind == "terabox":
+        # DM-only: this branch is only reachable from handlers/search.py,
+        # whose handler is already filters.private-only, and it's
+        # explicitly blocked from the inline-mode path in
+        # handlers/inline.py (inline results can be posted into groups).
+        status = await message.reply_text(STARTING_TEXT)
+        await run_terabox_download(client, value, chat_id=message.chat.id, status=status)
 
     elif kind == "unsupported_url":
         await message.reply_text(UNSUPPORTED_LINK_TEXT)

@@ -2,7 +2,7 @@
 # Licensed under the MIT License.
 
 
-from pyrogram import Client
+from ftmgram import Client
 
 from .. import LOGGER
 from ..utils.cache import cache
@@ -42,6 +42,54 @@ async def resolve_cdn(entry: dict) -> tuple[str, dict]:
             **entry,
             "title": result.get("title") or entry.get("title"),
             "thumbnail": result.get("thumbnail") or result.get("thumbnail_url") or entry.get("thumbnail"),
+        }
+
+        if kind in ("instagram", "twitter"):
+            # These two now come back from the API with much richer
+            # metadata (caption/text, author, per-post stats, and — for a
+            # carousel post or a multi-media tweet — the *full* media
+            # list) instead of just a single cdn link. Fold the useful
+            # bits into the caption and, when there's more than one media
+            # item, hand the whole list off so it gets delivered as an
+            # album instead of just the first item.
+            caption_text = result.get("caption") or result.get("text")
+            author = result.get("author") or {}
+            author_name = author.get("username") or author.get("name")
+
+            title_bits = [caption_text.strip()] if caption_text else []
+            if author_name:
+                title_bits.append(f"— @{author_name}" if not author_name.startswith("@") else f"— {author_name}")
+            entry["title"] = " ".join(title_bits) or entry.get("title")
+
+            media_list = result.get("media") or []
+            if len(media_list) > 1:
+                entry["media_group"] = media_list
+
+        return result.get("cdn"), entry
+
+    if kind == "applemusic":
+        result = await yt_api.download_applemusic(entry["url"])
+        if not result.get("success"):
+            raise YTAPIError(f"Unable to fetch from Apple Music: {result.get('error', 'download failed')}")
+        entry = {
+            **entry,
+            "title": result.get("title") or entry.get("title"),
+            "artist": result.get("artist") or entry.get("artist"),
+            "thumbnail": result.get("thumbnail") or entry.get("thumbnail"),
+            "duration": result.get("duration") or entry.get("duration"),
+        }
+        return result.get("cdn"), entry
+
+    if kind == "jiosaavn":
+        result = await yt_api.download_jiosaavn(entry["url"])
+        if not result.get("success"):
+            raise YTAPIError(f"Unable to fetch from JioSaavn: {result.get('error', 'download failed')}")
+        entry = {
+            **entry,
+            "title": result.get("title") or entry.get("title"),
+            "artist": result.get("artist") or entry.get("artist"),
+            "thumbnail": result.get("thumbnail") or entry.get("thumbnail"),
+            "duration": result.get("duration") or entry.get("duration"),
         }
         return result.get("cdn"), entry
 
@@ -95,11 +143,17 @@ async def run_download(client: Client, token: str, *, chat_id: int, status=None)
 
         await _update_status(status, f"{SENDING_TEXT} {title}")
 
-        await downloader.deliver_to_chat(
-            client, chat_id, cdn_url,
-            title=title, artist=artist, duration=duration,
-            thumbnail_url=thumbnail, platform=platform,
-        )
+        media_group = entry.get("media_group")
+        if media_group:
+            await downloader.deliver_media_group_to_chat(
+                client, chat_id, media_group, caption=title, platform=platform,
+            )
+        else:
+            await downloader.deliver_to_chat(
+                client, chat_id, cdn_url,
+                title=title, artist=artist, duration=duration,
+                thumbnail_url=thumbnail, platform=platform,
+            )
         if status:
             await status.delete()
 

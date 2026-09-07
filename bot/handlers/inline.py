@@ -2,9 +2,9 @@
 # Licensed under the MIT License.
 
 
-from pyrogram import filters
-from pyrogram.handlers import CallbackQueryHandler, InlineQueryHandler
-from pyrogram.types import CallbackQuery, InlineQuery
+from ftmgram import filters
+from ftmgram.handlers import CallbackQueryHandler, InlineQueryHandler
+from ftmgram.types import CallbackQuery, InlineQuery
 
 from .. import LOGGER
 from ..core.client import app
@@ -35,10 +35,23 @@ async def search(client, inline_query: InlineQuery):
 
     kind, value = classifier.classify(query)
 
-    if kind in ("youtube_playlist", "spotify_playlist"):
+    if kind in ("youtube_playlist", "spotify_playlist", "applemusic_playlist", "jiosaavn_playlist"):
         await inline_query.answer(
             results=[],
             switch_pm_text="Open in private chat to browse this playlist",
+            switch_pm_parameter="hi",
+            cache_time=1,
+        )
+        return
+
+    if kind == "terabox":
+        # Terabox is DM-only (large multi-file payloads + the 10-minute
+        # auto-delete only make sense in a 1:1 chat with the bot) —
+        # inline results can be posted into any group/channel by anyone,
+        # so it never gets an inline result, in any chat_type.
+        await inline_query.answer(
+            results=[],
+            switch_pm_text="Terabox links only work in a private chat — tap here",
             switch_pm_parameter="hi",
             cache_time=1,
         )

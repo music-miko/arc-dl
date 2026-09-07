@@ -2,7 +2,7 @@
 # Licensed under the MIT License.
 
 
-from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+from ftmgram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from .format import truncate
 

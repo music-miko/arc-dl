@@ -12,6 +12,7 @@ from .keyboards import KeyboardBuilder, keyboards
 from .mime import MediaSniffer, sniffer
 from .onboarding import build_clone_keyboard, suggest_clone_username
 from .registry import HandlerRegistry
+from .rich import build_download_rich_content
 from .stats import format_stats_text
 from .texts import (
     CLONE_HINT_TEXT,

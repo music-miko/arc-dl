@@ -2,9 +2,9 @@
 # Licensed under the MIT License.
 
 
-from pyrogram import filters
-from pyrogram.handlers import CallbackQueryHandler, MessageHandler
-from pyrogram.types import CallbackQuery, ManagedBotUpdated, Message
+from ftmgram import filters
+from ftmgram.handlers import CallbackQueryHandler, MessageHandler
+from ftmgram.types import CallbackQuery, ManagedBotUpdated, Message
 
 from .. import LOGGER
 from ..core.client import app

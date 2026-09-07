@@ -10,9 +10,9 @@ import uuid
 from urllib.parse import urlparse
 
 import aiohttp
-from pyrogram import Client
-from pyrogram.errors import RPCError
-from pyrogram.types import InputMediaAudio, InputMediaDocument, InputMediaPhoto, InputMediaVideo
+from ftmgram import Client
+from ftmgram.errors import RPCError
+from ftmgram.types import InputMediaAudio, InputMediaDocument, InputMediaPhoto, InputMediaVideo
 
 from .. import LOGGER
 from ..utils.format import duration_to_seconds, guess_kind_from_ext, sanitize_filename
@@ -249,7 +249,7 @@ class MediaDownloader:
         duration=None,
         thumbnail_url: str | None = None,
         platform: str = "youtube",
-    ) -> None:
+    ):
         file_path = thumb_path = None
         try:
             file_path, thumb, thumb_path, kind, width, height, resolved_duration, caption, safe_name = (
@@ -257,7 +257,7 @@ class MediaDownloader:
             )
 
             if kind == "audio":
-                await client.send_audio(
+                sent = await client.send_audio(
                     chat_id, audio=file_path, file_name=safe_name,
                     title=title[:60] if title else None,
                     performer=artist[:60] if artist else None,
@@ -265,7 +265,7 @@ class MediaDownloader:
                     thumb=thumb, caption=caption,
                 )
             elif kind == "video":
-                await client.send_video(
+                sent = await client.send_video(
                     chat_id, video=file_path, file_name=safe_name,
                     duration=resolved_duration,
                     width=width, height=height,
@@ -273,12 +273,59 @@ class MediaDownloader:
                     thumb=thumb, caption=caption,
                 )
             elif kind == "photo":
-                await client.send_photo(chat_id, photo=file_path, caption=caption)
+                sent = await client.send_photo(chat_id, photo=file_path, caption=caption)
             else:
-                await client.send_document(chat_id, document=file_path, file_name=safe_name, caption=caption)
+                sent = await client.send_document(chat_id, document=file_path, file_name=safe_name, caption=caption)
+
+            return sent
 
         finally:
             self._cleanup(file_path, thumb_path)
+
+    async def deliver_media_group_to_chat(
+        self,
+        client: Client,
+        chat_id: int,
+        media_items: list[dict],
+        caption: str = "",
+        platform: str = "instagram",
+    ):
+        """Delivers a carousel post / multi-media tweet as a Telegram
+        album. Telegram caps media groups at 10 items, so anything beyond
+        that is dropped (the caption still reflects the full post)."""
+        MAX_GROUP_SIZE = 10
+        items = media_items[:MAX_GROUP_SIZE]
+
+        downloaded_paths: list[str] = []
+        media_input = []
+        try:
+            for i, item in enumerate(items):
+                item_url = item.get("url")
+                if not item_url:
+                    continue
+                job_id = uuid.uuid4().hex[:12]
+                dest_base = os.path.join(self.download_dir, f"{platform}_{job_id}")
+                try:
+                    path, _ext = await self._download_http(item_url, dest_base)
+                except Exception as e:
+                    LOGGER.warning("Skipping one media-group item (fetch failed): %s", e)
+                    continue
+
+                downloaded_paths.append(path)
+                item_caption = caption if i == 0 else None
+                item_kind = (item.get("type") or "").lower()
+                if item_kind == "video" or path.lower().endswith((".mp4", ".mov", ".webm")):
+                    media_input.append(InputMediaVideo(path, caption=item_caption))
+                else:
+                    media_input.append(InputMediaPhoto(path, caption=item_caption))
+
+            if not media_input:
+                raise RuntimeError("None of the media-group items could be fetched")
+
+            return await client.send_media_group(chat_id, media_input)
+
+        finally:
+            self._cleanup(*downloaded_paths)
 
     async def deliver_to_inline(
         self,

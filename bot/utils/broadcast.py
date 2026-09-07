@@ -4,8 +4,8 @@
 
 import asyncio
 
-from pyrogram.errors import FloodWait
-from pyrogram.types import Message
+from ftmgram.errors import FloodWait
+from ftmgram.types import Message
 
 from ..core.mongo import mongo
 

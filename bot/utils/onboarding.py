@@ -4,7 +4,7 @@
 
 import re
 
-from pyrogram.types import KeyboardButton, KeyboardButtonRequestManagedBot, ReplyKeyboardMarkup
+from ftmgram.types import KeyboardButton, KeyboardButtonRequestManagedBot, ReplyKeyboardMarkup
 
 
 def suggest_clone_username(user) -> str:

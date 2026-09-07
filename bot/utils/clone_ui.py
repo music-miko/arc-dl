@@ -2,7 +2,7 @@
 # Licensed under the MIT License.
 
 
-from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+from ftmgram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from ..core.clones import clones
 from ..core.mongo import mongo

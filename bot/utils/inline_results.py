@@ -2,7 +2,7 @@
 # Licensed under the MIT License.
 
 
-from pyrogram.types import (
+from ftmgram.types import (
     InlineKeyboardButton,
     InlineKeyboardMarkup,
     InlineQueryResultArticle,
@@ -13,6 +13,7 @@ from .. import LOGGER
 from ..dl.api_client import YTAPIError, yt_api
 from .classifier import classifier
 from .format import truncate
+from .rich import build_download_rich_content
 
 SEARCH_LIMIT = 5
 DEFAULT_THUMB = "https://graph.org/file/d3c072a02035a883a717d-c55ae1cc21e629e39e.jpg"
@@ -44,6 +45,12 @@ async def build_candidates(kind: str, value: str) -> list[dict]:
     if kind == "spotify_track":
         return [{"type": "spotify", "url": value, "title": "Spotify Track"}]
 
+    if kind == "applemusic_track":
+        return [{"type": "applemusic", "url": value, "title": "Apple Music Track"}]
+
+    if kind == "jiosaavn_track":
+        return [{"type": "jiosaavn", "url": value, "title": "JioSaavn Track"}]
+
     if kind == "soundcloud":
         return [{"type": "soundcloud_direct_link", "url": value, "title": "SoundCloud Track"}]
 
@@ -66,16 +73,33 @@ def build_result(token: str, entry: dict) -> InlineQueryResultArticle:
     body = title
     if artist:
         body += f"\n{artist}"
-    body += "\n\nTap Download below to fetch this."
+
+    callback_data = f"idl:{token}"
+
+    # Bot API 10.3's InputRichBlockButtons lets the "Download" button live
+    # inside the message's own rich content instead of a separate
+    # reply_markup keyboard below it — and 10.1 explicitly allows
+    # InputRichMessageContent as inline query InputMessageContent. Falls
+    # back to the classic text + InlineKeyboardMarkup combo automatically
+    # if the installed ftmgram build doesn't support it yet.
+    rich_content = build_download_rich_content(body, "⬇️ Download", callback_data)
+    if rich_content:
+        return InlineQueryResultArticle(
+            id=token,
+            title=truncate(title, 60),
+            description=truncate(artist, 60) if artist else "Tap to fetch this",
+            thumb_url=thumb,
+            input_message_content=rich_content,
+        )
 
     return InlineQueryResultArticle(
         id=token,
         title=truncate(title, 60),
         description=truncate(artist, 60) if artist else "Tap to fetch this",
         thumb_url=thumb,
-        input_message_content=InputTextMessageContent(body),
+        input_message_content=InputTextMessageContent(body + "\n\nTap Download below to fetch this."),
         reply_markup=InlineKeyboardMarkup(
-            [[InlineKeyboardButton("⬇️ Download", callback_data=f"idl:{token}")]]
+            [[InlineKeyboardButton("⬇️ Download", callback_data=callback_data)]]
         ),
     )
 

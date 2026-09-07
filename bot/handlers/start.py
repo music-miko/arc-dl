@@ -2,9 +2,9 @@
 # Licensed under the MIT License.
 
 
-from pyrogram import filters
-from pyrogram.handlers import MessageHandler
-from pyrogram.types import Message
+from ftmgram import filters
+from ftmgram.handlers import MessageHandler
+from ftmgram.types import Message
 
 from ..core.client import app
 from ..core.config import config

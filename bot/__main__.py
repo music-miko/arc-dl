@@ -5,7 +5,7 @@
 import asyncio
 from contextlib import suppress
 
-from pyrogram import idle
+from ftmgram import idle
 
 from . import LOGGER, __bot_name__, __version__, app, mongo, setup_directories, yt_api
 from .core.clones import clones

@@ -15,7 +15,8 @@ logging.basicConfig(
     stream=sys.stdout,
 )
 
-logging.getLogger("pyrogram").setLevel(logging.WARNING)
+logging.getLogger("ftmgram").setLevel(logging.WARNING)
+logging.getLogger("pyrogram").setLevel(logging.WARNING)  # ftmgram is a Pyrogram fork; quiet both logger names
 logging.getLogger("pymongo").setLevel(logging.WARNING)
 logging.getLogger("aiohttp").setLevel(logging.WARNING)
 
@@ -46,5 +47,6 @@ from .dl import (
     downloader,
     resolve_cdn,
     run_download,
+    run_terabox_download,
     yt_api,
 )

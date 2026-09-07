@@ -2,7 +2,7 @@
 # Licensed under the MIT License.
 
 
-from pyrogram import Client
+from ftmgram import Client
 
 from .config import config
 

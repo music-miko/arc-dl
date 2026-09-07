@@ -8,12 +8,13 @@ I fetch and send media from a link or a search, right here in this chat.
 
 Send me:
 - A song name — I'll show the top matches, tap one to get it
-- A YouTube, Spotify, or SoundCloud link — I'll fetch it directly
-- A playlist link — I'll list its tracks, tap any one to download
-- An Instagram, Facebook, Threads, TikTok, Twitter (X), or Bluesky link — I'll fetch the media in it
+- A YouTube, Spotify, SoundCloud, Apple Music, or JioSaavn link — I'll fetch it directly
+- A playlist/album link — I'll list its tracks, tap any one to download
+- An Instagram, Facebook, Threads, TikTok, Twitter (X), Bluesky, Pinterest, or Reddit link — I'll fetch the media in it
+- A Terabox link — private chat with me only; files are auto-deleted 10 minutes after I send them
 
 Inline mode: type @{bot_username} <song name or link> in any chat — results
-are sent directly, no extra taps needed.
+are sent directly, no extra taps needed. (Terabox links aren't available in inline mode — DM me instead.)
 
 Use /privacy to see how I handle your data.
 
@@ -31,6 +32,7 @@ PRIVACY_TEXT = """Privacy
 - I store your Telegram user ID, first name, and username only so I can reach you with important updates — no messages or search history are kept.
 - Links and song names you send are forwarded to Arc API purely to fetch the file; they aren't logged anywhere by this bot.
 - Downloaded files are deleted from this server right after being sent to you.
+- Terabox files are additionally auto-deleted from the chat itself 10 minutes after I send them, and are only ever sent in a private chat with me.
 
 This isn't a substitute for reading the terms of the services you're downloading from — please respect copyright and each platform's own rules.
 """
@@ -61,7 +63,8 @@ SENDING_TEXT = "Sending..."
 STARTING_TEXT = "Starting download..."
 NO_RESULTS_TEXT = "No results found."
 UNSUPPORTED_LINK_TEXT = (
-    "I don't recognize that link. I support YouTube, Spotify, SoundCloud, "
-    "Instagram, Facebook, Threads, Bluesky, TikTok, and Twitter/X links, "
+    "I don't recognize that link. I support YouTube, Spotify, SoundCloud, Apple Music, "
+    "JioSaavn, Instagram, Facebook, Threads, Bluesky, TikTok, Twitter/X, Pinterest, "
+    "Reddit, and Terabox (Terabox links only work in a private chat with me) — "
     "or just send me a song name."
 )

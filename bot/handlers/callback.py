@@ -2,9 +2,9 @@
 # Licensed under the MIT License.
 
 
-from pyrogram import filters
-from pyrogram.handlers import CallbackQueryHandler
-from pyrogram.types import CallbackQuery
+from ftmgram import filters
+from ftmgram.handlers import CallbackQueryHandler
+from ftmgram.types import CallbackQuery
 
 from ..core.client import app
 from ..dl.actions import run_download

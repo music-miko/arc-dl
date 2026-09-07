@@ -4,8 +4,8 @@
 
 import os
 
-from pyrogram import Client
-from pyrogram.types import InputChatPhotoStatic
+from ftmgram import Client
+from ftmgram.types import InputChatPhotoStatic
 
 from .. import LOGGER
 from .config import config
