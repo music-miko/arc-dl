@@ -18,7 +18,7 @@ async def main() -> None:
     await mongo.connect()
     await yt_api.get_session()
 
-    app.start()
+    await app.start()
 
     from . import handlers
 
@@ -34,7 +34,7 @@ async def main() -> None:
             with suppress(Exception):
                 await clones.stop(bot_id)
         with suppress(Exception):
-            app.stop()
+            await app.stop()
         with suppress(Exception):
             await yt_api.close()
         with suppress(Exception):
@@ -44,6 +44,8 @@ async def main() -> None:
 
 if __name__ == "__main__":
     try:
-        asyncio.run(main())
+        # Use the default event loop instead of creating a new one with asyncio.run()
+        loop = asyncio.get_event_loop()
+        loop.run_until_complete(main())
     except KeyboardInterrupt:
         pass
