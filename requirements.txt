@@ -1,7 +1,4 @@
-# ftmgram is a drop-in Pyrogram/Kurigram fork with Bot API 10.1+ Rich
-# Message support (sendRichMessage, InputRichBlock*, and — from 10.3 —
-# InputRichBlockButtons). See bot/utils/rich.py for how we use it.
-ftmgram>=3.1.0
+kurigram>=2.2.24
 tgcrypto
 aiohttp
 motor==3.6.0
