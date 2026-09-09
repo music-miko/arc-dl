@@ -45,7 +45,6 @@ class KeyboardBuilder:
             if duration:
                 label = f"{label} - {duration}"
             rows.append([InlineKeyboardButton(label, callback_data=f"dl:{token}")])
-        rows.append(self.updates_channel_row(lang))
         return InlineKeyboardMarkup(rows)
 
     def paginated_results_keyboard(
@@ -75,7 +74,6 @@ class KeyboardBuilder:
         if len(nav) > 1:
             rows.append(nav)
 
-        rows.append(self.updates_channel_row(lang))
         return InlineKeyboardMarkup(rows)
 
     def start_keyboard(self, bot_username: str, lang: str = default_lang) -> InlineKeyboardMarkup:
@@ -115,7 +113,6 @@ def build_clone_list_keyboard(docs: list[dict], lang: str = default_lang) -> Inl
             ),
             InlineKeyboardButton(text("btn_delete", lang), callback_data=f"mybot_delete:{bot_id}"),
         ])
-    rows.append(keyboards.updates_channel_row(lang))
     return InlineKeyboardMarkup(rows)
 
 
