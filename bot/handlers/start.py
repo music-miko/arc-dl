@@ -29,7 +29,6 @@ async def start_cmd(client, message: Message):
             body + t("clone_hint_text", lang),
             reply_markup=build_clone_keyboard(user, lang) if user else None,
         )
-        await message.reply_text(t("stay_updated_text", lang), reply_markup=keyboards.updates_channel_markup(lang))
     else:
         await message.reply_text(body, reply_markup=keyboards.start_keyboard(client.me.username or "", lang))
 
