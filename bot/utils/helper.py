@@ -179,11 +179,14 @@ async def broadcast_to_users(source: Message, user_ids: list[int], status: Messa
     return sent, failed
 
 
-def sanitize_filename(name: str, max_len: int = 150) -> str:
+def sanitize_filename(name: str, max_bytes: int = 150) -> str:
     name = name or "track"
     name = re.sub(r'[\\/*?:"<>|]', "", name).strip()
     name = re.sub(r"\s+", " ", name)
-    return name[:max_len] or "track"
+    encoded = name.encode("utf-8")
+    if len(encoded) > max_bytes:
+        name = encoded[:max_bytes].decode("utf-8", errors="ignore").strip()
+    return name or "track"
 
 
 def duration_to_seconds(duration) -> int:

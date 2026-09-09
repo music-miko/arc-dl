@@ -257,7 +257,7 @@ class MediaDownloader:
         return caption
 
     async def _fetch_and_prepare(
-        self, client: Client, cdn_url: str, title: str, platform: str, filename_hint: str | None = None,
+        self, client: Client, cdn_url: str, platform: str, filename_hint: str | None = None,
     ) -> tuple[str, str, str, int, int, int]:
         job_id = uuid.uuid4().hex[:12]
         raw_base = os.path.join(self.download_dir, job_id)
@@ -276,8 +276,7 @@ class MediaDownloader:
             if audio_path != path:
                 with contextlib.suppress(Exception):
                     os.remove(path)
-            safe_name = sanitize_filename(title)
-            final_path = os.path.join(self.download_dir, f"{job_id}_{safe_name}{audio_ext}")
+            final_path = os.path.join(self.download_dir, f"{job_id}{audio_ext}")
             os.replace(audio_path, final_path)
             return final_path, audio_ext, "audio", 0, 0, 0
 
@@ -288,8 +287,7 @@ class MediaDownloader:
                 kind = sniffed
                 ext = ".jpg" if sniffed == "photo" else ".mp4"
 
-        safe_name = sanitize_filename(title)
-        final_path = os.path.join(self.download_dir, f"{job_id}_{safe_name}{ext}")
+        final_path = os.path.join(self.download_dir, f"{job_id}{ext}")
         if os.path.abspath(path) != os.path.abspath(final_path):
             os.replace(path, final_path)
 
@@ -319,7 +317,7 @@ class MediaDownloader:
     ) -> tuple[str, str | None, str, str, int, int, int, str, str]:
         thumb_path = os.path.join(self.download_dir, f"{uuid.uuid4().hex[:12]}.jpg")
         file_path, ext, kind, width, height, probed_duration = await self._fetch_and_prepare(
-            client, cdn_url, title, platform, filename_hint
+            client, cdn_url, platform, filename_hint
         )
         thumb = await self._download_thumbnail(thumbnail_url, thumb_path) if kind in ("audio", "video") else None
         caption = self._build_caption(title, artist)
